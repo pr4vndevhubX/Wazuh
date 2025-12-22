@@ -1,0 +1,468 @@
+# ============================================================================
+# IP INTELLIGENCE CREW - TASK DEFINITIONS
+# ============================================================================
+
+task_coordinator:
+  description: >
+    You are receiving these specific IP addresses to investigate: {ip_addresses}
+    
+    Your responsibilities:
+    1. Parse and validate the IP addresses from: {ip_addresses}
+    2. Split comma-separated IPs into individual addresses
+    3. Validate each IP format (IPv4: x.x.x.x or IPv6)
+    4. Remove any duplicates from the list
+    5. Prepare the validated IP list for analysis
+    
+    CRITICAL RULES:
+    - ONLY analyze the IPs provided in {ip_addresses}
+    - Do NOT add, substitute, or analyze any other IP addresses
+    - Do NOT use example IPs or test IPs
+    - If an IP is invalid, note it but continue with valid ones
+    
+    OUTPUT REQUIREMENTS:
+    Provide a clear summary with:
+    - Total number of IPs received
+    - List of valid IPs to be analyzed
+    - List of any invalid IPs (if present)
+    - Confirmation that these IPs will be sent to specialized agents
+    
+  expected_output: >
+    Coordination Report:
+    
+    RECEIVED IP ADDRESSES: {ip_addresses}
+    
+    VALIDATION RESULTS:
+    - Total IPs Received: X
+    - Valid IPs: [list each IP]
+    - Invalid IPs: [list if any, or "None"]
+    
+    NEXT STEPS:
+    These valid IPs will be analyzed by:
+    - VirusTotal Reputation Specialist
+    - AbuseIPDB Analyst  
+    - Internal Threat Intelligence Analyst (Yeti)
+    
+    Proceeding with analysis...
+  agent: coordinator_agent
+
+task_virustotal_check:
+  description: >
+    Query VirusTotal API for each IP address provided by the coordinator.
+    
+    INSTRUCTIONS:
+    1. Use the VirusTotal IP Checker tool for EACH IP from the coordinator
+    2. Collect malicious vendor count (X/98 format)
+    3. Record reputation scores
+    4. Determine verdict (clean vs malicious)
+    5. Note any vendor-specific detections
+    
+    REQUIREMENTS:
+    - Check ALL IPs provided by the coordinator
+    - Use the tool once per IP address
+    - Report clear verdicts for each IP
+    - Flag any IP with malicious detections > 0
+    
+    OUTPUT FORMAT:
+    For each IP, provide:
+    - IP Address
+    - Malicious Count (X/98 vendors)
+    - Reputation Score
+    - Verdict (CLEAN or MALICIOUS)
+    - Summary of findings
+    
+  expected_output: >
+    VirusTotal Analysis Results:
+    
+    IP: [IP Address 1]
+    - Vendors Flagged: X/98
+    - Reputation Score: XXX
+    - Verdict: CLEAN/MALICIOUS
+    - Details: [vendor names if malicious]
+    
+    IP: [IP Address 2]
+    - Vendors Flagged: X/98
+    - Reputation Score: XXX
+    - Verdict: CLEAN/MALICIOUS
+    - Details: [vendor names if malicious]
+    
+    [Repeat for all IPs]
+    
+  agent: virustotal_agent
+  context:
+    - task_coordinator
+
+task_abuseipdb_check:
+  description: >
+    Query AbuseIPDB for each IP address provided by the coordinator.
+    
+    INSTRUCTIONS:
+    1. Use the AbuseIPDB Checker tool for EACH IP from the coordinator
+    2. Collect abuse confidence scores (0-100%)
+    3. Record total number of reports
+    4. Capture ISP and country information
+    5. Check whitelist status
+    6. Determine verdict based on confidence score
+    
+    REQUIREMENTS:
+    - Check ALL IPs provided by the coordinator
+    - Use the tool once per IP address
+    - Consider confidence > 50% as HIGH RISK
+    - Note whitelisted IPs (Google, Cloudflare, etc.)
+    
+    OUTPUT FORMAT:
+    For each IP, provide:
+    - IP Address
+    - Abuse Confidence Score (%)
+    - Total Reports
+    - ISP Name
+    - Country Code
+    - Whitelist Status
+    - Verdict (CLEAN, SUSPICIOUS, or ABUSIVE)
+    
+  expected_output: >
+    AbuseIPDB Analysis Results:
+    
+    IP: [IP Address 1]
+    - Abuse Confidence: X%
+    - Total Reports: XXX
+    - ISP: [ISP Name]
+    - Country: [CC]
+    - Whitelisted: Yes/No
+    - Verdict: CLEAN/SUSPICIOUS/ABUSIVE
+    
+    IP: [IP Address 2]
+    - Abuse Confidence: X%
+    - Total Reports: XXX
+    - ISP: [ISP Name]
+    - Country: [CC]
+    - Whitelisted: Yes/No
+    - Verdict: CLEAN/SUSPICIOUS/ABUSIVE
+    
+    [Repeat for all IPs]
+    
+  agent: abuseipdb_agent
+  context:
+    - task_coordinator
+
+task_yeti_check:
+  description: >
+    Search internal Yeti threat intelligence platform for each IP address
+    provided by the coordinator.
+    
+    INSTRUCTIONS:
+    1. Use the Yeti Threat Intelligence tool for EACH IP from the coordinator
+    2. Check if IP exists in Yeti database
+    3. Collect all threat tags (blocklist, malware, c2, etc.)
+    4. Note any historical context
+    5. Determine threat level based on tags
+    
+    REQUIREMENTS:
+    - Search ALL IPs provided by the coordinator
+    - Use the tool once per IP address
+    - List all tags found
+    - Indicate if IP was found or not found
+    
+    OUTPUT FORMAT:
+    For each IP, provide:
+    - IP Address
+    - Found Status (Yes/No)
+    - Tags (if found)
+    - Verdict (if found: MALICIOUS/SUSPICIOUS)
+    - Summary
+    
+  expected_output: >
+    Yeti Threat Intelligence Results:
+    
+    IP: [IP Address 1]
+    - Found in Yeti: Yes/No
+    - Tags: [list tags or "N/A"]
+    - Verdict: MALICIOUS/SUSPICIOUS/NOT_FOUND
+    - Summary: [context if found]
+    
+    IP: [IP Address 2]
+    - Found in Yeti: Yes/No
+    - Tags: [list tags or "N/A"]
+    - Verdict: MALICIOUS/SUSPICIOUS/NOT_FOUND
+    - Summary: [context if found]
+    
+    [Repeat for all IPs]
+    
+  agent: yeti_agent
+  context:
+    - task_coordinator
+
+task_siem_query:
+  description: >
+    ⚠️ CRITICAL: YOU MUST USE THE "Query Wazuh SIEM History" TOOL ⚠️
+    
+    DO NOT GUESS OR MAKE UP DATA. ONLY REPORT WHAT THE TOOL RETURNS.
+    
+    MANDATORY EXECUTION STEPS:
+    
+    1. CALL THE TOOL:
+       - Use tool name: "Query Wazuh SIEM History"
+       - Pass parameter: ip_address (from coordinator)
+       - Pass parameter: days=30 (or as specified)
+    
+    2. WAIT FOR TOOL RESPONSE:
+       - The tool will return a dictionary with real data
+       - Check 'alerts_found' field for actual count
+       - Check 'critical_alerts' and 'suspicious_alerts' counts
+       - Check 'summary' field for human-readable summary
+    
+    3. REPORT EXACTLY WHAT TOOL RETURNED:
+       ✅ CORRECT: "Tool returned 8 alerts (5 CRITICAL, 2 SUSPICIOUS)"
+       ❌ WRONG:   "I estimate there are about 8 alerts" (NEVER estimate!)
+    
+    4. IF TOOL RETURNS ZERO ALERTS:
+       - Report: "No alerts found for this IP in Wazuh SIEM"
+       - Do NOT say "might have", "possibly", "likely" - be definitive
+    
+    5. IF TOOL RETURNS ERROR:
+       - Report the exact error message
+       - Do NOT try to continue without data
+    
+    VERIFICATION CHECKLIST:
+    - [ ] Did you call the tool? (not just think about it)
+    - [ ] Did you receive tool output? (check for 'alerts_found' field)
+    - [ ] Are you reporting tool data? (not your assumptions)
+    - [ ] Did you include specific counts? (exact numbers, not ranges)
+    
+    EXAMPLE CORRECT WORKFLOW:
+    
+    User asks about: 45.135.197.136
+    
+    You MUST do:
+    1. Action: Query Wazuh SIEM History
+    2. Input: {"ip_address": "45.135.197.136", "days": 30}
+    3. Tool Output: {"alerts_found": 8, "critical_alerts": 5, "summary": "..."}
+    4. Your Response: "Wazuh SIEM found 8 alerts for 45.135.197.136:
+       - 5 CRITICAL alerts
+       - 2 SUSPICIOUS alerts
+       - First seen: 2025-12-02
+       - Most common: SSH brute force"
+    
+    FORBIDDEN BEHAVIORS:
+    - ❌ Saying "approximately X alerts" without tool call
+    - ❌ Using phrases like "based on patterns" or "typically"
+    - ❌ Inventing timestamps or alert descriptions
+    - ❌ Skipping tool call and going straight to answer
+    
+    OUTPUT FORMAT:
+    For each IP, provide:
+    - IP Address
+    - Alerts Found: [EXACT number from tool]
+    - CRITICAL Alerts: [EXACT number from tool]
+    - SUSPICIOUS Alerts: [EXACT number from tool]
+    - Timeline Summary: [From tool's 'summary' field]
+    - Verdict: PREVIOUSLY_DETECTED (if alerts > 0) or NEVER_SEEN (if alerts = 0)
+    
+  expected_output: >
+    Wazuh SIEM Query Results:
+    
+    IP: [IP Address]
+    - Alerts Found: [EXACT COUNT FROM TOOL - e.g., 8]
+    - CRITICAL: [EXACT COUNT - e.g., 5] alerts
+    - SUSPICIOUS: [EXACT COUNT - e.g., 2] alerts
+    - BENIGN: [EXACT COUNT - e.g., 1] alerts
+    - Timeline: First seen [DATE], Last seen [DATE]
+    - Most Common Alert: [DESCRIPTION FROM TOOL]
+    - Verdict: PREVIOUSLY_DETECTED / NEVER_SEEN
+    
+    [MUST include tool's query_metadata for verification]
+    - Total alerts checked in DB: [FROM TOOL]
+    - Database query time: [FROM TOOL]
+    
+  agent: siem_agent
+  context:
+    - task_coordinator
+
+task_correlation_analysis:
+  description: >
+    Correlate findings from VirusTotal, AbuseIPDB, and Yeti to determine
+    overall threat level for EACH IP address analyzed.
+    
+    ANALYSIS FRAMEWORK:
+    
+    🔴 CRITICAL - Immediate Action Required:
+    - Yeti tags contain: 'malware', 'c2', 'ransomware', 'apt'
+    - VirusTotal: > 5 vendors flagged as malicious
+    - AbuseIPDB: Confidence score > 75%
+    
+    🟠 HIGH - Close Monitoring Required:
+    - VirusTotal: 1-4 vendors flagged as malicious
+    - AbuseIPDB: Confidence score 50-75%
+    - Yeti tags contain: 'suspicious', 'blocklist', 'scanner'
+    
+    🟡 MEDIUM - Worth Monitoring:
+    - VirusTotal: Suspicious detections (not malicious)
+    - AbuseIPDB: Confidence score 25-49%
+    - Yeti: Found but with low-risk tags
+    
+    🟢 LOW - Minimal Risk:
+    - Clean across all sources
+    - Minor indicators but not confirmed malicious
+    - No significant detections
+    
+    ⚪ BENIGN - Legitimate Services:
+    - Whitelisted services (Google, Cloudflare, AWS, Microsoft)
+    - Zero detections across all three sources
+    - Confirmed legitimate infrastructure
+    
+    INSTRUCTIONS:
+    1. Review ALL results from the three specialist agents
+    2. Apply the threat classification framework above
+    3. Assign a threat level to EACH IP
+    4. Provide detailed reasoning for EACH classification
+    5. Map to MITRE ATT&CK techniques when applicable
+    6. Recommend specific actions for each threat level
+
+    context:
+    - task_coordinator
+    - task_virustotal_check
+    - task_abuseipdb_check
+    - task_yeti_check
+    - task_siem_query 
+    
+    REQUIREMENTS:
+    - Analyze each IP holistically using all three sources
+    - Consider source reliability and context
+    - Provide clear, evidence-based reasoning
+    - Assign final threat level with confidence
+    
+  expected_output: >
+    CORRELATION ANALYSIS REPORT
+    ========================================
+    
+    IP: [IP Address 1]
+    ------------------------
+    Threat Level: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🟢 LOW / ⚪ BENIGN
+    
+    Evidence Summary:
+    - VirusTotal: [X/98 vendors, reputation score]
+    - AbuseIPDB: [X% confidence, XXX reports, ISP, Country]
+    - Yeti: [Found/Not Found, tags if applicable]
+    
+    Reasoning:
+    [Detailed explanation of why this threat level was assigned,
+    considering all three sources and their reliability]
+    
+    MITRE ATT&CK Mapping: [Technique ID and name, if applicable]
+    
+    Recommended Action:
+    [Specific next steps based on threat level]
+    
+    ------------------------
+    
+    [Repeat for all IPs analyzed]
+    
+  agent: analyst_agent
+  context:
+    - task_coordinator
+    - task_virustotal_check
+    - task_abuseipdb_check
+    - task_yeti_check
+
+task_generate_report:
+  description: >
+    Generate IOC Investigation Report in AnalystDeck AI format.
+    
+    🚨 CRITICAL: ATTACK TIMELINE MUST USE ONLY REAL DATABASE ALERTS 🚨
+    
+    TIMELINE GENERATION RULES:
+    1. Get the 'alerts' array from SIEM agent's task_siem_query output
+    2. If 'alerts' array is EMPTY or MISSING:
+       → Write: "No alerts found in Wazuh SIEM for this IP"
+       → DO NOT create fake timeline entries
+    3. If 'alerts' array has data:
+       → For each alert, use EXACT timestamp and rule_description
+       → Format: YYYY-MM-DD HH:MM:SS - [exact rule_description from database]
+    4. Show maximum 10 alerts in timeline (oldest first)
+    5. If more than 10 alerts exist:
+       → Add: "... and X more alerts (use SIEM for full list)"
+    
+    FORBIDDEN - NEVER DO THIS:
+    ❌ Inventing timestamps like "2025-12-15 08:12:04"
+    ❌ Creating descriptions like "Fortigate blocked outbound HTTP..."
+    ❌ Using phrases: "typical patterns", "likely", "approximately"
+    ❌ Making up events when alert data is missing
+    
+    VERIFICATION CHECKLIST BEFORE WRITING TIMELINE:
+    - [ ] Do I have the 'alerts' array from task_siem_query?
+    - [ ] Does each alert have 'timestamp' and 'rule_description'?
+    - [ ] Am I copying EXACT values (not paraphrasing)?
+    - [ ] If no data, am I saying "No alerts found"?
+    
+    EXAMPLE CORRECT TIMELINE (using real data):
+    SIEM returned:
+    {
+      'alerts': [
+        {'timestamp': '2025-12-15T08:12:04Z', 'rule_description': 'SSH: Multiple failed login attempts'},
+        {'timestamp': '2025-12-15T09:45:19Z', 'rule_description': 'SSH: Successful login after failures'}
+      ]
+    }
+    
+    Your timeline MUST be:
+    ⏱️ Attack Timeline
+    2025-12-15 08:12:04 - SSH: Multiple failed login attempts
+    2025-12-15 09:45:19 - SSH: Successful login after failures
+    
+    EXAMPLE INCORRECT (hallucinated):
+    ⏱️ Attack Timeline
+    2025-12-15 08:12:04 - Fortigate blocked outbound HTTP request ❌ FAKE!
+    
+    MANDATORY FORMAT:
+    1. Header: "🔵 IOC Investigation Report" with Target IP
+    2. Verdict: 💀 Malicious or ✅ Clean
+    3. 🌐 External Intelligence
+    4. 🏢 Internal Impact
+    5. ⏱️ Attack Timeline (ONLY from database alerts)
+    6. 📊 Activity Analysis (ONLY based on real timeline)
+    7. 🎯 Recommended Actions
+    8. Footer: "Generated by AnalystMate at [timestamp]"
+    
+  expected_output: >
+    🔵 IOC Investigation Report
+    Target: [IP]
+    
+    Verdict: 💀 Malicious / ✅ Clean
+    > [Brief explanation]
+    
+    🌐 External Intelligence
+    📍 Location: [Country] | ISP: [Name]
+    - VirusTotal: X/98 vendors
+    - AbuseIPDB: X% confidence
+    - 🔗 [VirusTotal](URL) | [AbuseIPDB](URL)
+    
+    🏢 Internal Impact
+    - Status: Unknown / Confirmed
+    - Affected Assets: [List or None]
+    - Alerts: ✅ No / ⚠️ YES
+    
+    ⏱️ Attack Timeline
+    [IF alerts exist:]
+    YYYY-MM-DD HH:MM:SS - [EXACT rule_description from alert 1]
+    YYYY-MM-DD HH:MM:SS - [EXACT rule_description from alert 2]
+    ... and X more alerts
+    
+    [IF NO alerts:]
+    No alerts found in Wazuh SIEM for this IP in the last 30 days.
+    
+    📊 Activity Analysis
+    [Narrative based ONLY on real timeline above, or "No activity detected"]
+    
+    🎯 Recommended Actions
+    - [Specific action 1]
+    - [Specific action 2]
+    
+    ---
+    +Generated by AnalystMate at YYYY-MM-DD HH:MM:SS+
+    
+  agent: reporter_agent
+  context:
+    - task_coordinator
+    - task_virustotal_check
+    - task_abuseipdb_check
+    - task_yeti_check
+    - task_siem_query  # ✅ This must contain full alerts array!
+    - task_correlation_analysis
