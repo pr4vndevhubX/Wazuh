@@ -18,7 +18,7 @@ class YetiTool(BaseTool):
         """
         base_url = "http://192.168.217.128:8000"
         username = "admin"
-        password = "YetiAdmin2025!"
+        password = "XXXXXXXXXX"
         
         try:
             # Authenticate
