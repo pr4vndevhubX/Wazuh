@@ -15,13 +15,17 @@ from tools.virustotal_tool import VirusTotalTool
 from tools.abuseipdb_tool import AbuseIPDBTool
 from tools.yeti_tool import YetiTool
 from tools.wazuh_siem_tool import WazuhSIEMTool
+from tools.ml_inference_tool import MLInferenceTool
+from tools.alert_triage_tool import AlertTriageTool
 
 load_dotenv()
 
 Virus_total_tool = VirusTotalTool()
 abuse_ip_tool = AbuseIPDBTool()
 yeti_tool = YetiTool()
-wazuh_siem_tool = WazuhSIEMTool() 
+wazuh_siem_tool = WazuhSIEMTool()
+ml_inference_tool = MLInferenceTool()
+alert_triage_tool = AlertTriageTool() 
 
 # ===== Configure LLM =====
 llm = LLM(
@@ -95,10 +99,21 @@ class IPIntelligenceCrew:
             verbose=True,
             allow_delegation=False
         )
+    
+    @agent
+    def ml_classifier_agent(self) -> Agent:
+        """Agent 6: ML Traffic Classifier"""
+        return Agent(
+            config=self.agents_config['ml_classifier_agent'],
+            llm=llm,
+            tools=[ml_inference_tool],
+            verbose=True,
+            allow_delegation=False
+        )
 
     @agent
     def analyst_agent(self) -> Agent:
-        """Agent 6: Threat Correlation Analyst"""
+        """Agent 7: Threat Correlation Analyst"""
         return Agent(
             config=self.agents_config['analyst_agent'],
             llm=llm,
@@ -108,13 +123,26 @@ class IPIntelligenceCrew:
     
     @agent
     def reporter_agent(self) -> Agent:
-        """Agent 7: Security Report Writer"""
+        """Agent 8: Security Report Writer"""
         return Agent(
             config=self.agents_config['reporter_agent'],
             llm=llm,
             verbose=True,
             allow_delegation=False
         )
+    
+    @agent
+    def alert_triage_agent(self) -> Agent:
+        """Agent 9: Alert Triage Analyst"""
+        return Agent(
+            config=self.agents_config['alert_triage_agent'],
+            llm=llm,
+            tools=[alert_triage_tool],
+            verbose=True,
+            allow_delegation=False
+        )
+    
+ 
     
     
     # ===== TASKS =====
@@ -164,8 +192,26 @@ class IPIntelligenceCrew:
         )
     
     @task
+    def task_ml_classification(self) -> Task:
+        """Task 6: ML Traffic Classification"""
+        return Task(
+            config=self.tasks_config['task_ml_classification'],
+            agent=self.ml_classifier_agent(),
+            context=[self.task_coordinator()]
+        )
+    
+    @task
+    def task_alert_triage(self) -> Task:
+        """Task 9: LLM Alert Analysis"""
+        return Task(
+            config=self.tasks_config['task_alert_triage'],
+            agent=self.alert_triage_agent(),
+            context=[self.task_coordinator()]
+        )
+    
+    @task
     def task_correlation_analysis(self) -> Task:
-        """Task 6: Correlate all findings"""
+        """Task 7: Correlate all findings"""
         return Task(
             config=self.tasks_config['task_correlation_analysis'],
             agent=self.analyst_agent(),
@@ -174,13 +220,15 @@ class IPIntelligenceCrew:
                 self.task_virustotal_check(),
                 self.task_abuseipdb_check(),
                 self.task_yeti_check(),
-                self.task_siem_query()
+                self.task_siem_query(),
+                self.task_ml_classification(),
+                self.task_alert_triage()
             ]
         )
     
     @task
     def task_generate_report(self) -> Task:
-        """Task 7: Generate final report"""
+        """Task 8: Generate final report"""
         return Task(
             config=self.tasks_config['task_generate_report'],
             agent=self.reporter_agent(),
@@ -189,9 +237,11 @@ class IPIntelligenceCrew:
                 self.task_virustotal_check(),
                 self.task_abuseipdb_check(),
                 self.task_yeti_check(),
+                self.task_ml_classification(),
                 self.task_correlation_analysis()
             ]
         )
+  
     
     # ===== CREW =====
     
@@ -218,9 +268,8 @@ if __name__ == "__main__":
         print(f"✅ Crew initialized successfully!")
         print(f"   Agents: {len(my_crew.agents)}")
         print(f"   Tasks: {len(my_crew.tasks)}")
-
-        pdf_filename = generate_pdf_report()
-        print(f"\n✅ Full report available at: {pdf_filename}")
+        # Remove this line - PDF is generated after crew runs, not here
+        # pdf_filename = generate_pdf_report()
         
     except Exception as e:
         print(f"❌ Error: {e}")

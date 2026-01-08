@@ -466,3 +466,22 @@ task_generate_report:
     - task_yeti_check
     - task_siem_query  # ✅ This must contain full alerts array!
     - task_correlation_analysis
+
+task_ml_classification:
+  description: Classify network traffic for IP {ip_address}
+  expected_output: ML prediction with confidence score
+  agent: ml_classifier_agent
+
+task_alert_triage:
+  description: >
+    Perform LLM-based triage analysis on alerts related to IP address {ip_address}.
+    Analyze alert severity, extract key indicators, and provide contextual threat assessment.
+    If service is unavailable, note this and continue.
+  expected_output: >
+    A structured alert triage report containing:
+    - Alert severity assessment
+    - Key threat indicators extracted
+    - Recommended priority level
+    - Contextual threat analysis
+    Or a note if service is unavailable.
+  agent: alert_triage_agent

@@ -79,4 +79,4 @@ if analyze_btn and ip_input:
 
 # Footer
 st.markdown("---")
-st.caption("Powered by CrewAI + Groq + Yeti Threat Intelligence")
+st.caption("Powered by Krya Solutions © 2025")

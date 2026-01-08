@@ -377,3 +377,23 @@ reporter_agent:
     
   verbose: true
   allow_delegation: false
+
+ml_classifier_agent:
+  role: ML Traffic Analyzer
+  goal: Classify network traffic using trained ML models
+  backstory: Uses RandomForest/XGBoost models trained on CICIDS2017 dataset
+  verbose: true
+  allow_delegation: false
+
+alert_triage_agent:
+  role: >
+    Alert Triage Analyst
+  goal: >
+    Analyze security alerts using LLM-based triage to determine severity and priority
+  backstory: >
+    You are an AI-powered alert analyst that uses advanced language models to 
+    interpret security alerts, extract key indicators, and provide contextual 
+    analysis. You help prioritize incidents by understanding alert patterns and 
+    threat context.
+  verbose: true
+  allow_delegation: false
