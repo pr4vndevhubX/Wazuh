@@ -4,17 +4,17 @@
 
 task_coordinator:
   description: >
-    You are receiving these specific IP addresses to investigate: {ip_addresses}
+    You are receiving these specific IP addresses to investigate: {ip_address}
     
     Your responsibilities:
-    1. Parse and validate the IP addresses from: {ip_addresses}
+    1. Parse and validate the IP addresses from: {ip_address}
     2. Split comma-separated IPs into individual addresses
     3. Validate each IP format (IPv4: x.x.x.x or IPv6)
     4. Remove any duplicates from the list
     5. Prepare the validated IP list for analysis
     
     CRITICAL RULES:
-    - ONLY analyze the IPs provided in {ip_addresses}
+    - ONLY analyze the IPs provided in {ip_address}
     - Do NOT add, substitute, or analyze any other IP addresses
     - Do NOT use example IPs or test IPs
     - If an IP is invalid, note it but continue with valid ones
@@ -29,7 +29,7 @@ task_coordinator:
   expected_output: >
     Coordination Report:
     
-    RECEIVED IP ADDRESSES: {ip_addresses}
+    RECEIVED IP ADDRESSES: {ip_address}
     
     VALIDATION RESULTS:
     - Total IPs Received: X
@@ -485,3 +485,16 @@ task_alert_triage:
     - Contextual threat analysis
     Or a note if service is unavailable.
   agent: alert_triage_agent
+
+task_mitre_context:
+  description: >
+    Retrieve MITRE ATT&CK context for threats associated with IP {ip_address}.
+    Search for relevant tactics, techniques, and threat actor patterns.
+    If service unavailable, note this and continue.
+  expected_output: >
+    MITRE ATT&CK context containing:
+    - Relevant tactics and techniques
+    - Associated threat actor TTPs
+    - Attack pattern descriptions
+    Or note if service unavailable.
+  agent: mitre_context_agent

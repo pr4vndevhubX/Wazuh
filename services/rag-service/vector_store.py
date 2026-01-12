@@ -37,19 +37,30 @@ class VectorStore:
         self.embedding_engine = embedding_engine
         self.host = host
         self.port = port
+        self.client = None  # Will connect lazily on first use
 
-        try:
-            self.client = chromadb.HttpClient(
-                host=host,
-                port=port,
-                settings=Settings(anonymized_telemetry=False)
-            )
-            logger.info(f"Connected to ChromaDB at {host}:{port}")
-        except Exception as e:
-            logger.error(f"Failed to connect to ChromaDB: {e}")
-            self.client = None
+        logger.info(f"VectorStore configured for {host}:{port} (lazy connection)")
 
-        logger.info("VectorStore initialized")
+    def get_client(self):
+        """
+        Lazy connection with automatic retry.
+        
+        Returns:
+            ChromaDB client or None if connection fails
+        """
+        if self.client is None:
+            try:
+                self.client = chromadb.HttpClient(
+                    host=self.host,
+                    port=self.port,
+                    settings=Settings(anonymized_telemetry=False)
+                )
+                self.client.heartbeat()  # Verify connection works
+                logger.info(f"✅ Connected to ChromaDB at {self.host}:{self.port}")
+            except Exception as e:
+                logger.warning(f"ChromaDB not ready: {e}")
+                return None
+        return self.client
 
     def is_connected(self) -> bool:
         """
@@ -59,12 +70,16 @@ class VectorStore:
             bool: Connection status
         """
         try:
-            if self.client:
-                self.client.heartbeat()
+            client = self.get_client()
+            if client:
+                heartbeat = client.heartbeat()
+                if heartbeat <= 0:
+                    raise Exception("ChromaDB not responding")
                 return True
             return False
         except Exception as e:
             logger.error(f"ChromaDB connection check failed: {e}")
+            self.client = None  # Reset for retry
             return False
 
     def create_collection(
@@ -83,7 +98,8 @@ class VectorStore:
             bool: Success status
         """
         try:
-            if not self.client:
+            client = self.get_client()
+            if not client:
                 logger.error("ChromaDB client not initialized")
                 return False
 
@@ -91,14 +107,14 @@ class VectorStore:
 
             # Try to get existing collection first
             try:
-                self.client.get_collection(name=name)
+                client.get_collection(name=name)
                 logger.info(f"Collection {name} already exists")
                 return True
             except:
                 # Collection doesn't exist, create it
-                self.client.create_collection(
+                client.create_collection(
                     name=name,
-                    metadata=metadata or {}
+                    metadata=metadata or {"source": "rag-service"}
                 )
                 logger.info(f"Successfully created collection: {name}")
                 return True
@@ -129,14 +145,15 @@ class VectorStore:
             bool: Success status
         """
         try:
-            if not self.client:
+            client = self.get_client()
+            if not client:
                 logger.error("ChromaDB client not initialized")
                 return False
 
             logger.info(f"Adding {len(documents)} documents to {collection_name}")
 
             # Get collection
-            collection = self.client.get_collection(collection_name)
+            collection = client.get_collection(collection_name)
 
             # Generate IDs if not provided
             if ids is None:
@@ -189,14 +206,15 @@ class VectorStore:
             List of results with documents, metadata, and scores
         """
         try:
-            if not self.client:
+            client = self.get_client()
+            if not client:
                 logger.error("ChromaDB client not initialized")
                 return []
 
             logger.info(f"Querying {collection_name}: '{query_text[:50]}...'")
 
             # Get collection
-            collection = self.client.get_collection(collection_name)
+            collection = client.get_collection(collection_name)
 
             # Generate query embedding
             query_embedding = self.embedding_engine.embed_text(query_text)
@@ -248,11 +266,12 @@ class VectorStore:
             Dict with count, metadata, etc.
         """
         try:
-            if not self.client:
+            client = self.get_client()
+            if not client:
                 logger.error("ChromaDB client not initialized")
                 return {"count": 0, "status": "not_connected"}
 
-            collection = self.client.get_collection(collection_name)
+            collection = client.get_collection(collection_name)
             return {
                 'name': collection_name,
                 'count': collection.count(),
@@ -273,12 +292,13 @@ class VectorStore:
             bool: Success status
         """
         try:
-            if not self.client:
+            client = self.get_client()
+            if not client:
                 logger.error("ChromaDB client not initialized")
                 return False
 
             logger.warning(f"Deleting collection: {collection_name}")
-            self.client.delete_collection(collection_name)
+            client.delete_collection(collection_name)
             logger.info(f"Successfully deleted collection: {collection_name}")
             return True
         except Exception as e:

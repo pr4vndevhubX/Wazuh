@@ -18,11 +18,11 @@ services:
     container_name: ids-inference
 
     ports:
-      - "8000:8000"
+      - "8500:8000"
 
     volumes:
       # Mount models directory (read-only for security)
-      - ../models:/app/models:ro
+      - ./models:/app/models:ro
 
     environment:
       - MODEL_PATH=/app/models

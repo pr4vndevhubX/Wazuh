@@ -66,7 +66,8 @@ async def test_vector_store():
     logger.info("="*60)
 
     engine = EmbeddingEngine()
-    store = VectorStore(engine, host="localhost", port=8000)
+    # FIXED: Changed from localhost to chromadb
+    store = VectorStore(engine, host="chromadb", port=8000)
 
     # Test connection
     connected = store.is_connected()
@@ -143,7 +144,8 @@ async def test_mitre_ingestion():
         return
 
     engine = EmbeddingEngine()
-    store = VectorStore(engine, host="localhost", port=8000)
+    # FIXED: Changed from localhost to chromadb
+    store = VectorStore(engine, host="chromadb", port=8000)
     kb_manager = KnowledgeBaseManager(store)
 
     logger.info("Downloading MITRE ATT&CK framework...")

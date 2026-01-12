@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # MITRE ATT&CK Enterprise JSON URL
 MITRE_URL = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
-CHROMADB_HOST = "chromadb"  # Container hostname
-CHROMADB_PORT = 8000  # Internal port
+CHROMADB_HOST = "localhost"  # Container hostname
+CHROMADB_PORT = 8200  # Internal port
 
 
 def download_mitre_attack():

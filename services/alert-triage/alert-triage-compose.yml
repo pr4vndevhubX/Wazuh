@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  alert-triage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: alert-triage:latest
+    container_name: alert-triage
+    restart: unless-stopped
+    ports:
+      - "8100:8000"
+    environment:
+      - TRIAGE_OLLAMA_HOST=http://ollama:11434
+      - TRIAGE_PRIMARY_MODEL=llama3.2:3b
+      - TRIAGE_ML_API_URL=http://ids-inference:8500
+      - TRIAGE_RAG_SERVICE_URL=http://rag-service:8001
+      - TRIAGE_LOG_LEVEL=INFO
+    networks:
+      - ai_soc_network
+      - rag-service_soc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+networks:
+  ai_soc_network:
+    external: true
+  rag-service_soc-network:
+    external: true

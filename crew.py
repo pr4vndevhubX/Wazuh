@@ -17,6 +17,7 @@ from tools.yeti_tool import YetiTool
 from tools.wazuh_siem_tool import WazuhSIEMTool
 from tools.ml_inference_tool import MLInferenceTool
 from tools.alert_triage_tool import AlertTriageTool
+from tools.rag_tool import RAGTool
 
 load_dotenv()
 
@@ -25,7 +26,8 @@ abuse_ip_tool = AbuseIPDBTool()
 yeti_tool = YetiTool()
 wazuh_siem_tool = WazuhSIEMTool()
 ml_inference_tool = MLInferenceTool()
-alert_triage_tool = AlertTriageTool() 
+alert_triage_tool = AlertTriageTool()
+rag_tool = RAGTool() 
 
 # ===== Configure LLM =====
 llm = LLM(
@@ -142,6 +144,17 @@ class IPIntelligenceCrew:
             allow_delegation=False
         )
     
+    @agent
+    def mitre_context_agent(self) -> Agent:
+        """Agent 10: MITRE ATT&CK Analyst"""
+        return Agent(
+            config=self.agents_config['mitre_context_agent'],
+            llm=llm,
+            tools=[rag_tool],
+            verbose=True,
+            allow_delegation=False
+        )
+        
  
     
     
@@ -202,7 +215,7 @@ class IPIntelligenceCrew:
     
     @task
     def task_alert_triage(self) -> Task:
-        """Task 9: LLM Alert Analysis"""
+        """Task 7: LLM Alert Analysis"""
         return Task(
             config=self.tasks_config['task_alert_triage'],
             agent=self.alert_triage_agent(),
@@ -210,8 +223,17 @@ class IPIntelligenceCrew:
         )
     
     @task
+    def task_mitre_context(self) -> Task:
+        """Task 8: MITRE Context Retrieval"""
+        return Task(
+            config=self.tasks_config['task_mitre_context'],
+            agent=self.mitre_context_agent(),
+            context=[self.task_coordinator()]
+        )
+    
+    @task
     def task_correlation_analysis(self) -> Task:
-        """Task 7: Correlate all findings"""
+        """Task 9: Correlate all findings"""
         return Task(
             config=self.tasks_config['task_correlation_analysis'],
             agent=self.analyst_agent(),
@@ -222,13 +244,14 @@ class IPIntelligenceCrew:
                 self.task_yeti_check(),
                 self.task_siem_query(),
                 self.task_ml_classification(),
-                self.task_alert_triage()
+                self.task_alert_triage(),
+                self.task_mitre_context()
             ]
         )
     
     @task
     def task_generate_report(self) -> Task:
-        """Task 8: Generate final report"""
+        """Task 10: Generate final report"""
         return Task(
             config=self.tasks_config['task_generate_report'],
             agent=self.reporter_agent(),
@@ -241,7 +264,7 @@ class IPIntelligenceCrew:
                 self.task_correlation_analysis()
             ]
         )
-  
+    
     
     # ===== CREW =====
     

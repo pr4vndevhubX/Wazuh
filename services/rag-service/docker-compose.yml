@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    networks:
+      - soc-network
+
+  rag-service:
+    image: rag-service:latest
+    container_name: rag-service
+    ports:
+      - "8001:8000"
+    depends_on:
+      - chromadb
+    environment:
+      - RAG_CHROMADB_HOST=chromadb
+      - RAG_CHROMADB_PORT=8000
+    networks:
+      - soc-network
+
+volumes:
+  chroma-data:
+
+networks:
+  soc-network:
+    driver: bridge

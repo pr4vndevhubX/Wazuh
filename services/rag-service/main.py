@@ -7,6 +7,7 @@ Provides semantic search over security knowledge base.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
 
@@ -40,15 +41,20 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize components
         embedding_engine = EmbeddingEngine()
-        vector_store = VectorStore(embedding_engine)
+        
+        # Get ChromaDB connection from environment variables
+        chromadb_host = os.getenv("RAG_CHROMADB_HOST", "chromadb")
+        chromadb_port = int(os.getenv("RAG_CHROMADB_PORT", "8000"))
+        
+        logger.info(f"Configuring ChromaDB connection: {chromadb_host}:{chromadb_port}")
+        vector_store = VectorStore(
+            embedding_engine, 
+            host=chromadb_host, 
+            port=chromadb_port
+        )
         kb_manager = KnowledgeBaseManager(vector_store)
 
-        # Initialize ChromaDB collections
-        logger.info("Initializing ChromaDB collections...")
-        collections = ['mitre_attack', 'cve_database', 'incident_history', 'security_runbooks']
-        for collection in collections:
-            vector_store.create_collection(collection)
-
+        # Collections will be created on-demand (lazy initialization)
         logger.info("RAG Service initialization complete")
 
     except Exception as e:
@@ -74,7 +80,7 @@ class RetrievalRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query")
     collection: str = Field("mitre_attack", description="Knowledge base collection")
     top_k: int = Field(3, ge=1, le=10, description="Number of results to return")
-    min_similarity: float = Field(0.7, ge=0.0, le=1.0, description="Minimum similarity threshold")
+    min_similarity: float = Field(0.3, ge=0.0, le=1.0, description="Minimum similarity threshold")
 
 
 class RetrievalResult(BaseModel):
@@ -94,11 +100,15 @@ class RetrievalResponse(BaseModel):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    chromadb_status = vector_store.is_connected() if vector_store else False
+    
     return {
         "status": "healthy",
         "service": "rag-service",
         "version": "1.0.0",
-        "chromadb_connected": vector_store.is_connected() if vector_store else False
+        "chromadb_connected": chromadb_status,
+        "chromadb_host": os.getenv("RAG_CHROMADB_HOST", "chromadb"),
+        "chromadb_port": os.getenv("RAG_CHROMADB_PORT", "8000")
     }
 
 
@@ -172,6 +182,9 @@ async def ingest_documents(collection: str, documents: List[Dict[str, Any]]):
     """
     try:
         logger.info(f"Ingesting {len(documents)} documents into {collection}")
+
+        # Ensure collection exists (will create if needed)
+        vector_store.create_collection(collection)
 
         # Extract text and metadata
         texts = [doc.get('text', '') for doc in documents]
@@ -272,4 +285,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

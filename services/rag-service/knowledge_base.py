@@ -221,7 +221,7 @@ Data Sources: {', '.join(data_sources)}"""
 
         TODO: Week 5 - Implement runbook parsing
         """
-        logger.info(f"Ingesting security runbooks from {=runbooks_dir}")
+        logger.info(f"Ingesting security runbooks from {runbooks_dir}")
 
         # TODO: Week 5 - Parse markdown runbooks
         # Expected format:

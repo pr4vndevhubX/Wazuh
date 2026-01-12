@@ -30,7 +30,7 @@ def main():
         my_crew = crew_instance.crew()
         
         # Run analysis
-        result = my_crew.kickoff(inputs={'ip_addresses': ip_input})
+        result = my_crew.kickoff(inputs={'ip_address': ip_input})
         
         print("\n" + "=" * 50)
         print("✅ ANALYSIS COMPLETE")
