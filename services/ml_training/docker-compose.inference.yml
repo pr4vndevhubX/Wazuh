@@ -7,7 +7,7 @@
 #   docker-compose -f docker-compose.inference.yml logs -f
 #   docker-compose -f docker-compose.inference.yml down
 
-version: '3.8'
+
 
 services:
   ids-inference:
@@ -25,12 +25,12 @@ services:
       - ./models:/app/models:ro
 
     environment:
-      - MODEL_PATH=/app/models
+      - MODEL_PATH=C:/Users/psuresh/Desktop/IP+Wazuh/Wazuh/Threat-Intelligence-with-SIEM/services/models
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8500/health"]
       interval: 30s
       timeout: 10s
       start_period: 10s

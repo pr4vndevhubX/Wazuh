@@ -27,3 +27,6 @@ httpx==0.27.2
 # Security
 python-dotenv==1.0.1
 cryptography==43.0.1
+
+groq==0.4.0  # ADD THIS
+# Keep existing packages

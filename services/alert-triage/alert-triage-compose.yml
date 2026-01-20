@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   alert-triage:
     build:
@@ -13,7 +11,7 @@ services:
     environment:
       - TRIAGE_OLLAMA_HOST=http://ollama:11434
       - TRIAGE_PRIMARY_MODEL=llama3.2:3b
-      - TRIAGE_ML_API_URL=http://ids-inference:8500
+      - TRIAGE_ML_API_URL=http://ids-inference:8000
       - TRIAGE_RAG_SERVICE_URL=http://rag-service:8001
       - TRIAGE_LOG_LEVEL=INFO
     networks:
@@ -33,5 +31,6 @@ services:
 networks:
   ai_soc_network:
     external: true
+    name: ai_soc_network
   rag-service_soc-network:
     external: true

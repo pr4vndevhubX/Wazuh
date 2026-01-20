@@ -29,9 +29,9 @@ class OllamaClient:
     def __init__(
         self,
         host: str = "http://ollama:11434",
-        primary_model: str = "llama3.1:8b",
+        primary_model: str = "llama3.2:1b",
         fallback_models: Optional[List[str]] = None,
-        timeout: int = 60,
+        timeout: int = 120,
         max_retries: int = 3
     ):
         """

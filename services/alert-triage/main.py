@@ -11,9 +11,9 @@ import time
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from starlette.responses import Response
 
 from config import settings
@@ -27,20 +27,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Prometheus metrics
-REQUEST_COUNT = Counter(
+# Prometheus metrics - prevent duplicate registration
+def get_or_create_counter(name, description, labelnames):
+    """Get existing counter or create new one"""
+    try:
+        return REGISTRY._names_to_collectors.get(name)
+    except:
+        return Counter(name, description, labelnames)
+
+def get_or_create_histogram(name, description):
+    """Get existing histogram or create new one"""
+    try:
+        return REGISTRY._names_to_collectors.get(name)
+    except:
+        return Histogram(name, description)
+
+# Initialize metrics (safe for reload)
+REQUEST_COUNT = get_or_create_counter(
     'triage_requests_total',
     'Total alert triage requests',
     ['status']
-)
-REQUEST_DURATION = Histogram(
+) or Counter('triage_requests_total', 'Total alert triage requests', ['status'])
+
+REQUEST_DURATION = get_or_create_histogram(
     'triage_request_duration_seconds',
     'Alert triage request duration'
-)
-ANALYSIS_CONFIDENCE = Histogram(
+) or Histogram('triage_request_duration_seconds', 'Alert triage request duration')
+
+ANALYSIS_CONFIDENCE = get_or_create_histogram(
     'triage_confidence_score',
     'LLM confidence scores'
-)
+) or Histogram('triage_confidence_score', 'LLM confidence scores')
 
 # Global LLM client
 llm_client: OllamaClient = None
@@ -291,9 +308,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        app,  # Pass app object directly, not string
         host="0.0.0.0",
-        port=8000,
-        reload=True,  # Development only
+        port=8100,
         log_level=settings.log_level.lower()
     )

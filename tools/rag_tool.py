@@ -1,89 +1,100 @@
 """
-RAG Tool - MITRE ATT&CK Knowledge Retriever
-Queries the RAG service for threat intelligence context
+RAG MITRE Context Tool
+Retrieves MITRE ATT&CK context from RAG service
 """
 
 from crewai.tools import BaseTool
+from typing import Type
+from pydantic import BaseModel, Field
 import requests
-from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class RAGTool(BaseTool):
-    name: str = "MITRE ATT&CK Knowledge Retriever"
+class RAGMitreInput(BaseModel):
+    """Input for RAG MITRE retrieval"""
+    query: str = Field(..., description="Search query for MITRE ATT&CK")
+    top_k: int = Field(default=5, description="Number of results to return")
+
+
+class RAGMitreTool(BaseTool):
+    name: str = "MITRE ATT&CK Context Retriever"
     description: str = (
-        "Retrieves MITRE ATT&CK tactics, techniques, and threat context. "
-        "Use this to enrich threat analysis with standardized attack patterns. "
-        "Query with threat-related keywords (e.g., 'SSH brute force', 'ransomware C2', 'credential dumping')."
+        "Retrieves relevant MITRE ATT&CK tactics, techniques, and procedures "
+        "from the RAG knowledge base using semantic search."
     )
+    args_schema: Type[BaseModel] = RAGMitreInput
     
-    def _run(self, query: str) -> str:
+    def _run(self, query: str, top_k: int = 5) -> dict:
         """
-        Query the RAG service for MITRE ATT&CK context.
+        Retrieve MITRE context from RAG service.
         
         Args:
             query: Search query (e.g., "SSH brute force", "lateral movement")
+            top_k: Number of techniques to return
             
         Returns:
-            Structured MITRE ATT&CK context or error message
+            dict: MITRE techniques and context
         """
         try:
-            # Call RAG service
             response = requests.post(
                 "http://localhost:8001/retrieve",
                 json={
                     "query": query,
                     "collection": "mitre_attack",
-                    "top_k": 5,
+                    "top_k": top_k,
                     "min_similarity": 0.3
                 },
-                timeout=30
+                timeout=15
             )
             
-            # Handle service unavailability
             if not response.ok:
-                return "⚠️ MITRE ATT&CK service unavailable - continuing without MITRE context."
+                logger.warning(f"RAG service error: {response.status_code}")
+                return {
+                    "techniques_found": 0,
+                    "techniques": [],
+                    "error": f"Service unavailable: {response.status_code}"
+                }
             
             data = response.json()
             
-            # Handle no results
-            if not data.get("results") or data.get("total_results", 0) == 0:
-                return f"ℹ️ No relevant MITRE ATT&CK techniques found for query: '{query}'"
+            # Extract techniques
+            techniques = []
+            for result in data.get("results", []):
+                technique = {
+                    "technique_id": result.get("metadata", {}).get("technique_id", "N/A"),
+                    "name": result.get("metadata", {}).get("name", "Unknown"),
+                    "tactic": result.get("metadata", {}).get("tactic", "N/A"),
+                    "description": result.get("document", "")[:300] + "...",
+                    "similarity_score": result.get("similarity_score", 0.0),
+                    "platforms": result.get("metadata", {}).get("platforms", [])
+                }
+                techniques.append(technique)
             
-            # Build structured output
-            output = ["📊 MITRE ATT&CK CONTEXT:", ""]
-            output.append(f"Query: {query}")
-            output.append(f"Found: {data.get('total_results', 0)} relevant techniques")
-            output.append("")
+            result = {
+                "techniques_found": len(techniques),
+                "techniques": techniques,
+                "query_used": query,
+                "collection": "mitre_attack",
+                "service_status": "available"
+            }
             
-            for idx, result in enumerate(data["results"], 1):
-                metadata = result.get("metadata", {})
-                
-                # Extract technique details
-                name = metadata.get("name", "Unknown Technique")
-                tactics = metadata.get("tactics", "[]")
-                platforms = metadata.get("platforms", "[]")
-                score = result.get("similarity_score", 0.0)
-                
-                # Clean up tactics formatting
-                tactics_str = tactics.strip("[]").replace('"', '').replace("'", "")
-                
-                # Format output
-                output.append(f"{idx}. {name}")
-                output.append(f"   Tactics: {tactics_str}")
-                output.append(f"   Platforms: {platforms}")
-                output.append(f"   Relevance Score: {score:.2f}")
-                output.append("")
+            logger.info(f"RAG MITRE query '{query}': {len(techniques)} techniques found")
+            return result
             
-            output.append("⚠️ CRITICAL: Use ONLY the techniques listed above.")
-            output.append("⚠️ DO NOT invent or assume any MITRE techniques not shown here.")
-            
-            return "\n".join(output)
-            
-        except requests.exceptions.Timeout:
-            return "⚠️ MITRE ATT&CK service timeout - continuing without MITRE context."
-        
-        except requests.exceptions.ConnectionError:
-            return "⚠️ MITRE ATT&CK service not reachable - continuing without MITRE context."
-        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"RAG service connection error: {e}")
+            return {
+                "techniques_found": 0,
+                "techniques": [],
+                "error": f"Cannot connect to RAG service: {str(e)}",
+                "service_status": "unavailable"
+            }
         except Exception as e:
-            return f"⚠️ MITRE ATT&CK service error: {str(e)} - continuing without MITRE context."
+            logger.error(f"RAG query error: {e}")
+            return {
+                "techniques_found": 0,
+                "techniques": [],
+                "error": str(e)
+            }
