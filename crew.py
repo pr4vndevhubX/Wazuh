@@ -17,7 +17,7 @@ from tools.yeti_tool import YetiTool
 from tools.wazuh_siem_tool import WazuhSIEMTool
 from tools.ml_inference_tool import MLInferenceTool
 from tools.alert_triage_tool import AlertTriageTool
-from tools.rag_tool import RAGTool
+from tools.rag_tool import RAGMitreTool
 
 load_dotenv()
 
@@ -27,7 +27,7 @@ yeti_tool = YetiTool()
 wazuh_siem_tool = WazuhSIEMTool()
 ml_inference_tool = MLInferenceTool()
 alert_triage_tool = AlertTriageTool()
-rag_tool = RAGTool() 
+rag_tool = RAGMitreTool()
 
 # ===== Configure LLM =====
 llm = LLM(

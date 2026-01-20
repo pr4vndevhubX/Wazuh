@@ -39,7 +39,7 @@ class MLInferenceClient:
 
     def __init__(
         self,
-        ml_api_url: str = "http://ml-inference:8001",
+        ml_api_url: str = "http://ids-inference:8500",
         timeout: int = 10,
         enabled: bool = True
     ):
