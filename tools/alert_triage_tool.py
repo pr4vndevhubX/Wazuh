@@ -1,109 +1,309 @@
 """
-Alert Triage Tool
-Connects crew to LLM-based alert triage service
+Alert Triage Service - LLM-based Security Alert Analysis
+Runs on port 8000 (exposed as 8100 via Docker)
+Uses Ollama with llama3.2:3b for alert severity analysis
 """
 
-from crewai.tools import BaseTool
-from typing import Type
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from typing import List, Optional
 import requests
 import logging
+from datetime import datetime
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+app = FastAPI(
+    title="Alert Triage Service",
+    description="LLM-powered security alert analysis using Ollama",
+    version="1.0.0"
+)
 
-class AlertTriageInput(BaseModel):
-    """Input for Alert Triage"""
-    ip_address: str = Field(..., description="IP address from alert")
-    alert_data: dict = Field(default={}, description="Wazuh alert details")
+# Ollama configuration
+OLLAMA_URL = "http://ollama:11434"  # Docker network name
+OLLAMA_MODEL = "llama3.2:3b"
 
 
-class AlertTriageTool(BaseTool):
-    name: str = "Alert Triage Analyzer"
-    description: str = (
-        "Analyzes security alerts using LLM (Ollama). "
-        "Determines severity, extracts IOCs, and provides recommendations. "
-        "May be unavailable if Ollama is slow/offline."
-    )
-    args_schema: Type[BaseModel] = AlertTriageInput
+class AlertData(BaseModel):
+    """Wazuh alert structure"""
+    alert_id: str = Field(..., description="Unique alert identifier")
+    source_ip: str = Field(..., description="Source IP address")
+    rule_description: str = Field(..., description="Alert rule description")
+    rule_level: int = Field(..., description="Alert severity level (0-15)")
+    rule_id: Optional[str] = Field(None, description="Wazuh rule ID")
+    timestamp: Optional[str] = Field(None, description="Alert timestamp")
+    destination_ip: Optional[str] = None
+    destination_port: Optional[int] = None
+    protocol: Optional[str] = None
+    full_log: Optional[str] = None
+
+
+class TriageResponse(BaseModel):
+    """LLM triage analysis result"""
+    severity: str = Field(..., description="low, medium, high, critical")
+    confidence: float = Field(..., description="Confidence score 0.0-1.0")
+    is_true_positive: Optional[bool] = Field(None, description="True positive assessment")
+    iocs: List[dict] = Field(default_factory=list, description="Indicators of Compromise")
+    recommendations: List[str] = Field(default_factory=list, description="Action items")
+    mitre_techniques: List[str] = Field(default_factory=list, description="MITRE ATT&CK mappings")
+    summary: str = Field(..., description="Brief analysis summary")
+    model_used: str = Field(..., description="LLM model used")
+    processing_time_ms: float = Field(..., description="Analysis duration")
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    try:
+        # Check Ollama connectivity
+        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        ollama_status = "healthy" if response.ok else "unhealthy"
+    except Exception as e:
+        ollama_status = f"error: {str(e)}"
     
-    def _run(self, ip_address: str, alert_data: dict = None) -> dict:
-        """
-        Run LLM-based triage on alert.
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "ollama_status": ollama_status,
+        "model": OLLAMA_MODEL
+    }
+
+
+@app.post("/analyze", response_model=TriageResponse)
+async def analyze_alert(alert: AlertData):
+    """
+    Main endpoint: Analyze security alert using LLM
+    
+    Args:
+        alert: Wazuh alert data
         
-        Args:
-            ip_address: Source IP from alert
-            alert_data: Full alert details from Wazuh
-            
-        Returns:
-            dict: Triage analysis or fallback
-        """
+    Returns:
+        TriageResponse: LLM-based analysis
+    """
+    start_time = datetime.now()
+    
+    try:
+        # Build LLM prompt
+        prompt = build_analysis_prompt(alert)
+        
+        # Call Ollama
+        llm_response = call_ollama(prompt)
+        
+        # Parse LLM output
+        result = parse_llm_response(llm_response, alert)
+        
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds() * 1000
+        result["processing_time_ms"] = processing_time
+        result["model_used"] = OLLAMA_MODEL
+        
+        logger.info(f"Analyzed alert {alert.alert_id}: {result['severity']} ({result['confidence']:.2f})")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Analysis error for {alert.alert_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.post("/triage", response_model=TriageResponse)
+async def triage_alert(alert: AlertData):
+    """Alias endpoint for /analyze (backwards compatibility)"""
+    return await analyze_alert(alert)
+
+
+def build_analysis_prompt(alert: AlertData) -> str:
+    """
+    Construct detailed LLM prompt for alert analysis
+    
+    Args:
+        alert: Alert data
+        
+    Returns:
+        str: Formatted prompt
+    """
+    prompt = f"""You are a cybersecurity analyst performing triage on a security alert. Analyze the following alert and provide a structured assessment.
+
+**ALERT DETAILS:**
+- Alert ID: {alert.alert_id}
+- Source IP: {alert.source_ip}
+- Rule: {alert.rule_description}
+- Wazuh Severity Level: {alert.rule_level} (scale 0-15)
+"""
+
+    if alert.destination_ip:
+        prompt += f"- Destination IP: {alert.destination_ip}\n"
+    if alert.destination_port:
+        prompt += f"- Destination Port: {alert.destination_port}\n"
+    if alert.protocol:
+        prompt += f"- Protocol: {alert.protocol}\n"
+    if alert.full_log:
+        prompt += f"- Raw Log:\n{alert.full_log[:500]}\n"
+
+    prompt += """
+**YOUR TASK:**
+Provide a structured analysis in the following JSON format (respond ONLY with valid JSON, no markdown):
+
+{
+  "severity": "low|medium|high|critical",
+  "confidence": 0.0-1.0,
+  "is_true_positive": true|false|null,
+  "iocs": [
+    {"ioc_type": "ip|domain|hash|url", "value": "..."},
+    ...
+  ],
+  "recommendations": [
+    "Specific action item 1",
+    "Specific action item 2",
+    ...
+  ],
+  "mitre_techniques": ["T1190", "T1110", ...],
+  "summary": "Brief 2-3 sentence analysis"
+}
+
+**GUIDELINES:**
+- Severity: Map Wazuh level to realistic threat (0-5=low, 6-9=medium, 10-12=high, 13-15=critical)
+- Confidence: How certain are you? (0.0=guess, 1.0=certain)
+- True Positive: Is this a real attack or likely false positive?
+- IOCs: Extract IP addresses, domains, file hashes, URLs from the alert
+- Recommendations: Concrete next steps (block IP, investigate user, patch system, etc.)
+- MITRE: Map to ATT&CK techniques if applicable (e.g., T1190 for exploit, T1110 for brute force)
+- Summary: Explain what happened and why it matters
+
+Respond now with ONLY the JSON object:"""
+
+    return prompt
+
+
+def call_ollama(prompt: str, max_retries: int = 2) -> str:
+    """
+    Call Ollama API for LLM inference
+    
+    Args:
+        prompt: Analysis prompt
+        max_retries: Number of retry attempts
+        
+    Returns:
+        str: LLM response text
+    """
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.3,  # Lower temp for more consistent JSON
+            "top_p": 0.9,
+            "num_predict": 1024
+        }
+    }
+    
+    for attempt in range(max_retries):
         try:
-            # Build alert for triage service
-            if alert_data is None:
-                alert_data = {
-                    "alert_id": f"ip-investigation-{ip_address}",
-                    "source_ip": ip_address,
-                    "rule_description": f"IP reputation investigation for {ip_address}",
-                    "rule_level": 10
-                }
-            
             response = requests.post(
-                "http://localhost:8100/analyze",
-                json=alert_data,
-                timeout=90  # Give Ollama time
+                f"{OLLAMA_URL}/api/generate",
+                json=payload,
+                timeout=90  # LLM inference can be slow
             )
             
             if not response.ok:
-                logger.warning(f"Alert triage service error: {response.status_code}")
-                return self._fallback_analysis(ip_address)
+                logger.warning(f"Ollama error (attempt {attempt+1}): {response.status_code}")
+                continue
             
             data = response.json()
-            
-            result = {
-                "severity": data.get("severity", "medium"),
-                "confidence": data.get("confidence", 0.5),
-                "is_true_positive": data.get("is_true_positive", None),
-                "iocs": data.get("iocs", []),
-                "recommendations": data.get("recommendations", []),
-                "mitre_techniques": data.get("mitre_techniques", []),
-                "summary": data.get("summary", "No summary available"),
-                "model_used": data.get("model_used", "unknown"),
-                "ip_analyzed": ip_address,
-                "service_status": "available"
-            }
-            
-            logger.info(f"Alert triage for {ip_address}: {result['severity']} ({result['confidence']:.2f})")
-            return result
+            return data.get("response", "")
             
         except requests.exceptions.Timeout:
-            logger.warning(f"Alert triage timeout for {ip_address}")
-            return self._fallback_analysis(ip_address, reason="LLM timeout (Ollama too slow)")
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Alert triage connection error: {e}")
-            return self._fallback_analysis(ip_address, reason="Service unavailable")
-            
+            logger.warning(f"Ollama timeout (attempt {attempt+1})")
+            if attempt == max_retries - 1:
+                raise
         except Exception as e:
-            logger.error(f"Alert triage error: {e}")
-            return self._fallback_analysis(ip_address, reason=str(e))
+            logger.error(f"Ollama call failed: {e}")
+            if attempt == max_retries - 1:
+                raise
     
-    def _fallback_analysis(self, ip_address: str, reason: str = "Service unavailable") -> dict:
-        """Provide basic analysis when LLM service is down"""
+    raise Exception("Ollama API unavailable after retries")
+
+
+def parse_llm_response(llm_text: str, alert: AlertData) -> dict:
+    """
+    Parse LLM JSON response with fallback logic
+    
+    Args:
+        llm_text: Raw LLM output
+        alert: Original alert data
+        
+    Returns:
+        dict: Parsed triage result
+    """
+    import json
+    import re
+    
+    try:
+        # Try to extract JSON from response (handle markdown wrapping)
+        json_match = re.search(r'\{.*\}', llm_text, re.DOTALL)
+        if json_match:
+            llm_data = json.loads(json_match.group(0))
+        else:
+            llm_data = json.loads(llm_text)
+        
+        # Validate required fields
+        result = {
+            "severity": llm_data.get("severity", "medium").lower(),
+            "confidence": float(llm_data.get("confidence", 0.7)),
+            "is_true_positive": llm_data.get("is_true_positive"),
+            "iocs": llm_data.get("iocs", []),
+            "recommendations": llm_data.get("recommendations", []),
+            "mitre_techniques": llm_data.get("mitre_techniques", []),
+            "summary": llm_data.get("summary", "LLM analysis completed")
+        }
+        
+        # Ensure severity is valid
+        if result["severity"] not in ["low", "medium", "high", "critical"]:
+            result["severity"] = map_wazuh_level_to_severity(alert.rule_level)
+        
+        # Ensure confidence is in range
+        result["confidence"] = max(0.0, min(1.0, result["confidence"]))
+        
+        # Add source IP as IOC if not present
+        if not any(ioc.get("value") == alert.source_ip for ioc in result["iocs"]):
+            result["iocs"].insert(0, {"ioc_type": "ip", "value": alert.source_ip})
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to parse LLM response: {e}")
+        logger.debug(f"LLM output: {llm_text}")
+        
+        # Fallback to rule-based analysis
         return {
-            "severity": "medium",
-            "confidence": 0.0,
+            "severity": map_wazuh_level_to_severity(alert.rule_level),
+            "confidence": 0.5,
             "is_true_positive": None,
-            "iocs": [{"ioc_type": "ip", "value": ip_address}],
+            "iocs": [{"ioc_type": "ip", "value": alert.source_ip}],
             "recommendations": [
-                "Manual investigation required",
-                "Check external reputation sources",
-                "Review SIEM logs for activity"
+                "Manual review required - LLM parsing failed",
+                "Check external threat intelligence",
+                "Review SIEM logs for correlated activity"
             ],
             "mitre_techniques": [],
-            "summary": f"LLM-based triage unavailable ({reason}). Defaulting to manual review.",
-            "model_used": "fallback",
-            "ip_analyzed": ip_address,
-            "service_status": "unavailable",
-            "fallback_reason": reason
+            "summary": f"Automated analysis unavailable. Alert: {alert.rule_description}"
         }
+
+
+def map_wazuh_level_to_severity(level: int) -> str:
+    """Map Wazuh severity level (0-15) to category"""
+    if level <= 5:
+        return "low"
+    elif level <= 9:
+        return "medium"
+    elif level <= 12:
+        return "high"
+    else:
+        return "critical"
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

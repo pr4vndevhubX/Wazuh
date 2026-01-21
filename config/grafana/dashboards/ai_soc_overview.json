@@ -98,46 +98,10 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "up{job=\"wazuh-manager\"}",
-          "legendFormat": "Wazuh Manager",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "up{job=\"wazuh-indexer\"}",
-          "hide": false,
-          "legendFormat": "Wazuh Indexer",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "up{job=\"thehive\"}",
-          "hide": false,
-          "legendFormat": "TheHive",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
           "expr": "up{job=\"ml-inference\"}",
-          "hide": false,
           "legendFormat": "ML Inference",
           "range": true,
-          "refId": "D"
+          "refId": "A"
         },
         {
           "datasource": {
@@ -149,7 +113,7 @@
           "hide": false,
           "legendFormat": "Alert Triage",
           "range": true,
-          "refId": "E"
+          "refId": "B"
         },
         {
           "datasource": {
@@ -161,7 +125,19 @@
           "hide": false,
           "legendFormat": "RAG Service",
           "range": true,
-          "refId": "F"
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "up{job=\"crewai-orchestrator\"}",
+          "hide": false,
+          "legendFormat": "CrewAI Orchestrator",
+          "range": true,
+          "refId": "D"
         }
       ],
       "title": "Service Health Matrix",
@@ -178,50 +154,14 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
             "hideFrom": {
               "tooltip": false,
               "viz": false,
               "legend": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -231,16 +171,31 @@
         "x": 12,
         "y": 0
       },
-      "id": 2,
+      "id": 7,
       "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -252,14 +207,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100 - (avg by(name) (rate(container_cpu_usage_seconds_total{name=~\".*ml-inference.*|.*alert-triage.*|.*rag-service.*|.*wazuh.*|.*thehive.*\"}[5m])) * 100)",
-          "legendFormat": "{{name}}",
+          "expr": "sum by (severity) (wazuh_alerts_received_total)",
+          "legendFormat": "{{severity}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Container CPU Usage",
-      "type": "timeseries"
+      "title": "Alerts by Severity",
+      "type": "piechart"
     },
     {
       "datasource": {
@@ -269,37 +224,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -310,33 +235,38 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 50
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 100
               }
             ]
           },
-          "unit": "percent"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 8
       },
-      "id": 3,
+      "id": 8,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
       },
       "pluginVersion": "10.2.2",
       "targets": [
@@ -346,14 +276,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(container_memory_usage_bytes{name=~\".*ml-inference.*|.*alert-triage.*|.*rag-service.*|.*wazuh.*|.*thehive.*\"} / container_spec_memory_limit_bytes{name=~\".*ml-inference.*|.*alert-triage.*|.*rag-service.*|.*wazuh.*|.*thehive.*\"}) * 100",
-          "legendFormat": "{{name}}",
+          "expr": "sum(crewai_executions_total{status=\"success\"})",
+          "legendFormat": "Success",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Container Memory Usage",
-      "type": "timeseries"
+      "title": "CrewAI Successful Executions",
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -389,16 +319,13 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 6,
+        "x": 6,
         "y": 8
       },
-      "id": 4,
+      "id": 9,
       "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "horizontal",
+        "orientation": "auto",
         "reduceOptions": {
           "values": false,
           "calcs": [
@@ -406,7 +333,8 @@
           ],
           "fields": ""
         },
-        "showUnfilled": true,
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
         "text": {}
       },
       "pluginVersion": "10.2.2",
@@ -417,14 +345,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "count(ALERTS{alertstate=\"firing\"}) by (alertname)",
-          "legendFormat": "{{alertname}}",
+          "expr": "crewai_active_investigations",
+          "legendFormat": "Active",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Recent Active Alerts",
-      "type": "bargauge"
+      "title": "Active Investigations",
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -476,17 +404,17 @@
               }
             ]
           },
-          "unit": "ops"
+          "unit": "s"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 16
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
-      "id": 5,
+      "id": 10,
       "options": {
         "legend": {
           "calcs": [
@@ -511,25 +439,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(events_processed_total[5m])",
-          "legendFormat": "Events/sec",
+          "expr": "rate(crewai_execution_duration_seconds_sum[5m]) / rate(crewai_execution_duration_seconds_count[5m])",
+          "legendFormat": "Avg Duration",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "rate(http_requests_total{job=~\"ml-inference|alert-triage|rag-service\"}[5m])",
-          "hide": false,
-          "legendFormat": "API Requests/sec - {{job}}",
-          "range": true,
-          "refId": "B"
         }
       ],
-      "title": "Event Throughput",
+      "title": "CrewAI Execution Duration",
       "type": "timeseries"
     },
     {
@@ -549,15 +465,15 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 20,
             "gradientMode": "none",
             "hideFrom": {
               "tooltip": false,
               "viz": false,
               "legend": false
             },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -566,7 +482,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -582,7 +498,7 @@
               }
             ]
           },
-          "unit": "Bps"
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -590,14 +506,15 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 16
       },
-      "id": 6,
+      "id": 11,
       "options": {
         "legend": {
           "calcs": [
             "mean",
-            "lastNotNull"
+            "lastNotNull",
+            "max"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -616,25 +533,105 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(container_network_receive_bytes_total{name=~\".*ml-inference.*|.*alert-triage.*|.*rag-service.*|.*wazuh.*|.*thehive.*\"}[5m])",
-          "legendFormat": "RX - {{name}}",
+          "expr": "sum by (status) (rate(crewai_executions_total[5m]))",
+          "legendFormat": "{{status}}",
           "range": true,
           "refId": "A"
+        }
+      ],
+      "title": "CrewAI Execution Rate by Status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(container_network_transmit_bytes_total{name=~\".*ml-inference.*|.*alert-triage.*|.*rag-service.*|.*wazuh.*|.*thehive.*\"}[5m])",
-          "hide": false,
-          "legendFormat": "TX - {{name}}",
+          "expr": "sum by (reason) (increase(alerts_filtered_total[1h]))",
+          "legendFormat": "{{reason}}",
           "range": true,
-          "refId": "B"
+          "refId": "A"
         }
       ],
-      "title": "Container Network I/O",
+      "title": "Alerts Filtered (Hourly)",
       "type": "timeseries"
     }
   ],
@@ -643,7 +640,8 @@
   "style": "dark",
   "tags": [
     "ai-soc",
-    "overview"
+    "overview",
+    "crewai"
   ],
   "templating": {
     "list": []
@@ -654,8 +652,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "AI-SOC Overview",
-  "uid": "ai-soc-overview",
+  "title": "AI-SOC Overview with CrewAI",
+  "uid": "ai-soc-crewai",
   "version": 1,
   "weekStart": ""
 }
