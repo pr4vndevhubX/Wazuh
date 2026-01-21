@@ -1,11 +1,5 @@
 # ============================================================================
-# Prometheus Configuration for AI-SOC
-# ============================================================================
-# This configuration monitors all AI-SOC components:
-# - SIEM Stack (Wazuh)
-# - SOAR Stack (TheHive, Cortex, Shuffle)
-# - AI Services (ML Inference, Alert Triage, RAG)
-# - Infrastructure (Docker, Host)
+# Prometheus Configuration for AI-SOC (Host + Docker Hybrid)
 # ============================================================================
 
 global:
@@ -13,204 +7,108 @@ global:
   scrape_timeout: 10s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'ai-soc'
-    environment: 'production'
+    cluster: "ai-soc"
+    environment: "production"
 
-# AlertManager configuration
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: ['alertmanager:9093']
-
-# Load alert rules
-rule_files:
-  - '/etc/prometheus/alerts/*.yml'
-
-# Scrape configurations
+# ============================================================================
+# Scrape Configurations
+# ============================================================================
 scrape_configs:
-  # ============================================================================
-  # Prometheus self-monitoring
-  # ============================================================================
-  - job_name: 'prometheus'
+
+  # --------------------------------------------------------------------------
+  # Prometheus Self-Monitoring
+  # --------------------------------------------------------------------------
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
         labels:
-          component: 'monitoring'
-          service: 'prometheus'
+          component: "monitoring"
+          service: "prometheus"
 
-  # ============================================================================
-  # Node Exporter (Host Metrics)
-  # ============================================================================
-  - job_name: 'node-exporter'
+  # --------------------------------------------------------------------------
+  # CrewAI Orchestrator (FastAPI + Prometheus metrics)
+  # --------------------------------------------------------------------------
+  - job_name: "crewai-orchestrator"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets:
+          - "host.docker.internal:8002"
         labels:
-          component: 'infrastructure'
-          service: 'host'
+          component: "ai-services"
+          service: "crewai-orchestrator"
 
-  # ============================================================================
-  # cAdvisor (Container Metrics)
-  # ============================================================================
-  - job_name: 'cadvisor'
+  # --------------------------------------------------------------------------
+  # Alert Triage Service
+  # Container: alert-triage → 8100 -> 8000
+  # --------------------------------------------------------------------------
+  - job_name: "alert-triage"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['cadvisor:8080']
+      - targets:
+          - "host.docker.internal:8100"
         labels:
-          component: 'infrastructure'
-          service: 'containers'
+          component: "ai-services"
+          service: "alert-triage"
 
-  # ============================================================================
-  # SIEM Stack
-  # ============================================================================
-  - job_name: 'wazuh-manager'
-    metrics_path: '/metrics'
+  # --------------------------------------------------------------------------
+  # IDS / ML Inference Service
+  # Container: ids-inference → 8500 -> 8000
+  # --------------------------------------------------------------------------
+  - job_name: "ml-inference"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['wazuh-manager:55000']
+      - targets:
+          - "host.docker.internal:8500"
         labels:
-          component: 'siem'
-          service: 'wazuh-manager'
+          component: "ai-services"
+          service: "ml-inference"
 
-  - job_name: 'wazuh-indexer'
+  # --------------------------------------------------------------------------
+  # RAG Service
+  # Container: rag-service → 8001 -> 8000
+  # --------------------------------------------------------------------------
+  - job_name: "rag-service"
+    metrics_path: "/metrics"
     static_configs:
-      - targets: ['wazuh-indexer:9200']
+      - targets:
+          - "host.docker.internal:8001"
         labels:
-          component: 'siem'
-          service: 'wazuh-indexer'
-    basic_auth:
-      username: 'admin'
-      password: 'IJqutA0oOhd/DuqDUnlNRhhHQHK3kXiuRwp9w7dMDg4='
+          component: "ai-services"
+          service: "rag-service"
 
-  # ============================================================================
-  # SOAR Stack
-  # ============================================================================
-  - job_name: 'thehive'
-    metrics_path: '/api/metrics'
+  # --------------------------------------------------------------------------
+  # ChromaDB
+  # Container: chromadb → 8000
+  # --------------------------------------------------------------------------
+  - job_name: "chromadb"
+    metrics_path: "/api/v1/metrics"
     static_configs:
-      - targets: ['thehive:9000']
+      - targets:
+          - "host.docker.internal:8000"
         labels:
-          component: 'soar'
-          service: 'thehive'
+          component: "ai-services"
+          service: "chromadb"
 
-  - job_name: 'cortex'
-    metrics_path: '/api/metrics'
+  # --------------------------------------------------------------------------
+  # Ollama LLM Runtime
+  # Container: ollama → 11434
+  # --------------------------------------------------------------------------
+  - job_name: "ollama"
+    metrics_path: "/api/metrics"
     static_configs:
-      - targets: ['cortex:9001']
+      - targets:
+          - "host.docker.internal:11434"
         labels:
-          component: 'soar'
-          service: 'cortex'
+          component: "ai-services"
+          service: "ollama"
 
-  - job_name: 'shuffle-backend'
-    metrics_path: '/api/v1/metrics'
+  # --------------------------------------------------------------------------
+  # Docker Engine Metrics (ONLY if enabled)
+  # --------------------------------------------------------------------------
+  - job_name: "docker-engine"
     static_configs:
-      - targets: ['shuffle-backend:5001']
+      - targets:
+          - "host.docker.internal:9323"
         labels:
-          component: 'soar'
-          service: 'shuffle'
-
-  # ============================================================================
-  # AI Services (via host-exposed ports)
-  # ============================================================================
-  - job_name: 'ml-inference'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8500']
-        labels:
-          component: 'ai-services'
-          service: 'ml-inference'
-
-  - job_name: 'alert-triage'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8100']
-        labels:
-          component: 'ai-services'
-          service: 'alert-triage'
-
-  - job_name: 'rag-service'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8300']
-        labels:
-          component: 'ai-services'
-          service: 'rag-service'
-
-  - job_name: 'chromadb'
-    metrics_path: '/api/v1/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8200']
-        labels:
-          component: 'ai-services'
-          service: 'chromadb'
-
-  - job_name: 'ollama'
-    metrics_path: '/api/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:11434']
-        labels:
-          component: 'ai-services'
-          service: 'ollama'
-
-  - job_name: 'wazuh-integration'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8002']
-        labels:
-          component: 'ai-services'
-          service: 'wazuh-integration'
-
-  # ============================================================================
-  # Database Services
-  # ============================================================================
-  - job_name: 'cassandra'
-    static_configs:
-      - targets: ['cassandra:9042']
-        labels:
-          component: 'database'
-          service: 'cassandra'
-
-  - job_name: 'minio'
-    metrics_path: '/minio/v2/metrics/cluster'
-    static_configs:
-      - targets: ['minio:9000']
-        labels:
-          component: 'storage'
-          service: 'minio'
-
-  - job_name: 'opensearch'
-    static_configs:
-      - targets: ['opensearch:9200']
-        labels:
-          component: 'database'
-          service: 'opensearch'
-
-  # ============================================================================
-  # Docker Engine Metrics (if enabled)
-  # ============================================================================
-  - job_name: 'docker'
-    static_configs:
-      - targets: ['host.docker.internal:9323']
-        labels:
-          component: 'infrastructure'
-          service: 'docker-engine'
-
-  - job_name: 'crewai-orchestrator'
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['host.docker.internal:8002']  # For Docker to access Windows
-        labels:
-          component: 'ai-services'
-          service: 'crewai-orchestrator'
-
-
-
-# ============================================================================
-# Service Discovery (for dynamic container discovery)
-# ============================================================================
-# Uncomment to enable Docker service discovery
-#  - job_name: 'docker-containers'
-#    docker_sd_configs:
-#      - host: unix:///var/run/docker.sock
-#    relabel_configs:
-#      - source_labels: [__meta_docker_container_name]
-#        target_label: container_name
-#      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
-#        target_label: service
+          component: "infrastructure"
+          service: "docker-engine"
