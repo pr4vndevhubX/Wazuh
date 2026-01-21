@@ -17,6 +17,7 @@ services:
     networks:
       - ai_soc_network
       - rag-service_soc-network
+      - bridge 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
