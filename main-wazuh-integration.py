@@ -21,8 +21,8 @@ app = FastAPI(title="AI-SOC Wazuh Integration")
 
 # ===== SERVICE ENDPOINTS =====
 ALERT_TRIAGE_URL = "http://localhost:8100/triage"
-RAG_SERVICE_URL = "http://localhost:8200/query"
-ML_SERVICE_URL = "http://localhost:8300/predict"
+RAG_SERVICE_URL = "http://localhost:8001/query" 
+ML_SERVICE_URL = "http://localhost:8500/predict" 
 
 # ===== METRICS =====
 alerts_received_total = Counter(

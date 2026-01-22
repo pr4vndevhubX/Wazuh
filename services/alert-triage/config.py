@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # --------------------------------------------------
     ollama_host: str = "http://ollama:11434"
     primary_model: str = "llama3.1:8b"
+    fallback_model: str = "llama3.2:3b"
 
     # --------------------------------------------------
     # LLM Parameters
