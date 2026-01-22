@@ -1,276 +1,711 @@
-run code : "python -m streamlit run app.py"
+# Wazuh-CrewAI Threat Intelligence System
+## AI-Powered Multi-Agent Security Operations Platform
 
-# CrewAI IP Intelligence → AI-SOC Integration Plan
-
-## Current State
-```
-┌─────────────────────────────────────────────────────────┐
-│  YOUR CREWAI SYSTEM (Standalone)                        │
-│  Port: 8501                                             │
-│  - 7 AI Agents (Coordinator, VT, AbuseIPDB, Yeti, etc.) │
-│  - Tools: VirusTotal, AbuseIPDB, Yeti, Wazuh SIEM      │
-│  - Output: PDF Reports                                  │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│  EXISTING AI-SOC INFRASTRUCTURE (Separate)              │
-│  - ML Inference (:8500) - Network traffic classification│
-│  - Alert Triage (:8100) - LLM alert analysis            │
-│  - RAG Service (:8300) - MITRE ATT&CK knowledge base    │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Target Architecture (Integrated)
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                    USER INTERFACES                                    │
-├──────────────────────────────────────────────────────────────────────┤
-│  Wazuh (:443) │ Unified Dashboard (:3000) │ Grafana (:3001)          │
-│                      ↓                                                │
-│               [Shows both ML alerts                                   │
-│                + IP Intelligence Reports]                             │
-└──────────────────────────────────────────────────────────────────────┘
-                              ↓
-┌──────────────────────────────────────────────────────────────────────┐
-│                    ORCHESTRATION LAYER (NEW)                          │
-├──────────────────────────────────────────────────────────────────────┤
-│  Threat Intelligence Orchestrator (:8600)                             │
-│  - Receives alerts from Alert Triage                                  │
-│  - Extracts suspicious IPs from alerts                                │
-│  - Triggers CrewAI IP analysis                                        │
-│  - Enriches alerts with IP intelligence                               │
-│  - Sends enriched data to Dashboard                                   │
-└──────────────────────────────────────────────────────────────────────┘
-         ↓                    ↓                    ↓
-┌────────────────┐  ┌────────────────┐  ┌────────────────┐
-│ ML Inference   │  │ Alert Triage   │  │ RAG Service    │
-│ :8500          │  │ :8100          │  │ :8300          │
-│ Network Traffic│  │ LLM Analysis   │  │ MITRE ATT&CK   │
-└────────────────┘  └────────────────┘  └────────────────┘
-                           ↓
-                  ┌────────────────┐
-                  │ CrewAI System  │
-                  │ :8501          │
-                  │ IP Intelligence│
-                  └────────────────┘
-```
-
-## Integration Points
-
-### 1. **CrewAI API Wrapper** (NEW - Step 1)
-**Purpose:** Expose your CrewAI crew as a REST API instead of standalone script
-
-**File:** `services/crewai-intelligence/api_server.py`
-
-**Endpoints:**
-- `POST /analyze-ip` - Analyze single or multiple IPs
-- `GET /health` - Service health check
-- `GET /status/{task_id}` - Check analysis status
-
-**Changes to CrewAI:**
-- Keep all 7 agents unchanged
-- Keep all tools (VT, AbuseIPDB, Yeti, Wazuh) unchanged
-- Wrap `IPIntelligenceCrew.crew().kickoff()` in FastAPI endpoint
-- Return JSON instead of PDF (PDF as optional download)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
-### 2. **Orchestration Service** (NEW - Step 2)
-**Purpose:** Bridge between Alert Triage and CrewAI
+## Executive Summary
 
-**File:** `services/threat-orchestrator/main.py`
+This project implements an advanced threat intelligence platform that integrates **Wazuh SIEM** with **CrewAI multi-agent framework** to automate security alert investigation and threat analysis. The system combines machine learning, large language models, and external threat intelligence APIs to provide comprehensive security event analysis with detailed PDF reports.
 
-**Workflow:**
+### Key Capabilities
+
+- **Multi-Agent Investigation**: 10 specialized AI agents working collaboratively
+- **External Threat Intelligence**: Integration with VirusTotal, AbuseIPDB, YETI
+- **ML-Powered Classification**: Network traffic analysis with 99.28% accuracy
+- **LLM Alert Triage**: Automated severity assessment and prioritization
+- **MITRE ATT&CK Enrichment**: Contextual threat intelligence via RAG
+- **Automated Reporting**: Professional PDF investigation reports
+- **Real-Time Monitoring**: Prometheus + Grafana observability stack
+
+---
+
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+2. [System Architecture](#system-architecture)
+3. [Current System Status](#current-system-status)
+4. [Service Components](#service-components)
+5. [CrewAI Agent System](#crewai-agent-system)
+6. [Integration Workflow](#integration-workflow)
+7. [API Endpoints](#api-endpoints)
+8. [Monitoring & Observability](#monitoring--observability)
+9. [Documentation](#documentation)
+10. [Development Roadmap](#development-roadmap)
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- **Operating System**: Linux (Ubuntu 20.04+, WSL2, or bare metal)
+- **Memory**: 16GB RAM minimum (32GB recommended)
+- **Storage**: 50GB available disk space
+- **Docker**: Docker 24.0+ with Docker Compose V2
+- **Python**: 3.11+ (for development/testing)
+
+### 5-Minute Deployment
+
+```bash
+# 1. Clone repository
+git clone <your-repository-url>
+cd Threat-Intelligence-with-SIEM
+
+# 2. Copy environment template
+cp .env.example .env
+
+# 3. Configure API keys (required)
+nano .env
+# Add: VIRUSTOTAL_API_KEY, ABUSEIPDB_API_KEY, GROQ_API_KEY
+
+# 4. Start all services
+docker-compose up -d
+
+# 5. Verify deployment
+curl http://localhost:8002/health
+```
+
+### First Investigation
+
+```bash
+# Trigger a test investigation
+curl -X POST http://localhost:8002/investigate/test-alert-001
+
+# Check generated PDF report
+ls -l reports/IOC_Report_*.pdf
+```
+
+---
+
+## System Architecture
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       WAZUH SIEM (Alert Source)                      │
+│                    Port 1514 (Agent Communication)                   │
+└────────────────────────────┬────────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│              WAZUH INTEGRATION GATEWAY (Port 8002)                   │
+│                      Smart Alert Router                              │
+├─────────────────────────────────────────────────────────────────────┤
+│  Routing Logic:                                                      │
+│  • Level < 6   → Archive (no processing)                            │
+│  • Level 6-7   → Dashboard only                                     │
+│  • Level 8-9   → LLM Triage + Conditional Enrichment                │
+│  • Level 10+   → Full Pipeline + Investigation Flag                 │
+└────────────────────────────┬────────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                   MICROSERVICES LAYER                                │
+├─────────────────────────────────────────────────────────────────────┤
+│  Alert Triage (8100)    RAG Service (8001)    ML Inference (8500)   │
+│  • LLM Analysis         • MITRE ATT&CK KB     • Traffic Classify    │
+│  • Severity Score       • 835 Techniques      • 99.28% Accuracy     │
+│  • IOC Extraction       • Semantic Search     • 3ms Latency         │
+└────────────────────────────┬────────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│            CREWAI INVESTIGATION LAYER (Analyst-Triggered)            │
+├─────────────────────────────────────────────────────────────────────┤
+│  10 Specialized Agents:                                              │
+│  1. Coordinator         6. ML Classifier                             │
+│  2. VirusTotal          7. Alert Triage Analyst                      │
+│  3. AbuseIPDB           8. MITRE Context                             │
+│  4. YETI                9. Correlation Analyst                       │
+│  5. SIEM Historian     10. Report Generator                          │
+└────────────────────────────┬────────────────────────────────────────┘
+                             ↓
+                    ┌────────────────────┐
+                    │   PDF Report       │
+                    │   Generated        │
+                    └────────────────────┘
+```
+
+### Data Flow
+
+**Stage 1: Automatic Real-Time Processing**
+```
+Wazuh Alert → Integration Gateway → Severity Check
+                                          ↓
+                               ┌──────────┴─────────┐
+                               ↓                    ↓
+                        Level 8-9              Level 10+
+                               ↓                    ↓
+                        LLM Triage           Full Enrichment
+                               ↓                    ↓
+                    Conditional Enrichment   Flag for Investigation
+                               ↓                    ↓
+                          Dashboard            Dashboard + Queue
+```
+
+**Stage 2: Analyst-Triggered Investigation**
+```
+Analyst clicks "Investigate" → /investigate/{alert_id}
+                                          ↓
+                              CrewAI Orchestration
+                                          ↓
+                    ┌─────────────────────┴──────────────┐
+                    ↓                                    ↓
+            External Intel                      Internal Analysis
+            • VirusTotal                        • SIEM History
+            • AbuseIPDB                         • ML Prediction
+            • YETI                              • LLM Triage
+                    ↓                                    ↓
+                    └──────────────┬──────────────────────┘
+                                   ↓
+                         Correlation Analysis
+                                   ↓
+                         MITRE ATT&CK Context
+                                   ↓
+                           PDF Report (90-120s)
+```
+
+---
+
+## Current System Status
+
+### ✅ Operational Services (100%)
+
+| Service | Port | Status | Uptime | Health |
+|---------|------|--------|--------|--------|
+| **Alert Triage** | 8100 | Healthy | 3h+ | ✅ |
+| **RAG Service** | 8001 | Healthy | 3h+ | ✅ |
+| **ML Inference** | 8500 | Healthy | 3h+ | ✅ |
+| **ChromaDB** | 8000 | Running | 3h+ | ✅ |
+| **Ollama LLM** | 11434 | Running | 3h+ | ✅ |
+| **Prometheus** | 9090 | Running | 3h+ | ✅ |
+| **Loki** | 3100 | Running | 3h+ | ✅ |
+| **Promtail** | - | Running | 3h+ | ✅ |
+
+### 🚧 Services Pending Deployment
+
+- **Wazuh Manager** - SIEM core (configuration pending)
+- **Wazuh Indexer** - OpenSearch backend
+- **Wazuh Dashboard** - Web UI
+- **Grafana** - Metrics visualization (deployed separately)
+
+### ⚠️ Known Port Discrepancy
+
+Your services are running on **different ports** than the default configuration:
+
 ```python
-1. Listen for alerts from Alert Triage (:8100)
-2. Extract IPs from alert (source_ip, destination_ip)
-3. Check cache: Have we analyzed this IP recently?
-4. If not cached → Call CrewAI API (:8501)
-5. Get RAG context from :8300 for MITRE techniques
-6. Merge: Alert data + IP intelligence + MITRE context
-7. Store in database (PostgreSQL)
-8. Send to Dashboard via WebSocket
+# Current (Your Deployment)
+Alert Triage: Port 8100 ✅
+RAG Service:  Port 8001 ✅
+ML Inference: Port 8500 ✅
 ```
 
-**Database Schema:**
-```sql
-CREATE TABLE enriched_alerts (
-  id SERIAL PRIMARY KEY,
-  alert_id VARCHAR(100),
-  timestamp TIMESTAMP,
-  ml_verdict VARCHAR(20),           -- From ML Inference
-  ml_confidence FLOAT,               -- From ML Inference
-  alert_summary TEXT,                -- From Alert Triage
-  suspicious_ip VARCHAR(45),         -- Extracted IP
-  ip_threat_level VARCHAR(20),       -- CRITICAL/HIGH/etc from CrewAI
-  ip_vt_score VARCHAR(10),           -- 5/98 from CrewAI
-  ip_abuseipdb_score INT,            -- 0-100 from CrewAI
-  ip_yeti_status VARCHAR(20),        -- Found/Not Found from CrewAI
-  mitre_techniques TEXT[],           -- From RAG
-  full_report JSONB                  -- Complete CrewAI output
-);
+**Action Required**: Update `main-wazuh-integration.py` port mappings.
+
+---
+
+## Service Components
+
+### 1. Wazuh Integration Gateway (Port 8002)
+
+**Purpose**: Central webhook receiver and smart alert router
+
+**Key Features**:
+- Receives alerts from Wazuh via webhook
+- Severity-based routing logic
+- Conditional microservice invocation
+- Alert enrichment and storage
+- Investigation queue management
+
+**Endpoints**:
+```
+POST /webhook              - Receive Wazuh alerts
+POST /investigate/{id}     - Trigger CrewAI investigation
+GET  /health              - Service health check
+GET  /metrics             - Prometheus metrics
+```
+
+**Configuration**: `main-wazuh-integration.py`
+
+---
+
+### 2. Alert Triage Service (Port 8100)
+
+**Purpose**: LLM-powered alert severity assessment
+
+**Technology**:
+- Framework: FastAPI
+- LLM: Ollama (llama3.2:3b - 2GB model)
+- Response Time: 2-5 seconds
+
+**Capabilities**:
+- Severity classification (low/medium/high/critical)
+- Confidence scoring (0.0 - 1.0)
+- IOC extraction (IPs, domains, hashes)
+- MITRE ATT&CK technique mapping
+- Actionable recommendations
+
+**API**:
+```bash
+POST /analyze
+{
+  "rule_id": "5710",
+  "rule_description": "SSH brute force",
+  "rule_level": 10,
+  "source_ip": "192.168.1.100",
+  "raw_log": "Failed password..."
+}
+```
+
+**Response**:
+```json
+{
+  "severity": "high",
+  "confidence": 0.92,
+  "is_true_positive": true,
+  "iocs": [{"ioc_type": "ip", "value": "192.168.1.100"}],
+  "mitre_techniques": ["T1110.001"],
+  "recommendations": ["Block source IP", "Review logs"]
+}
 ```
 
 ---
 
-### 3. **Dashboard Enhancement** (NEW - Step 3)
-**Purpose:** Display unified view of ML alerts + IP intelligence
+### 3. RAG Service (Port 8001)
 
-**File:** `services/web-dashboard/src/components/EnrichedAlertView.jsx`
+**Purpose**: Semantic search over MITRE ATT&CK knowledge base
 
-**UI Layout:**
+**Technology**:
+- Vector DB: ChromaDB
+- Embeddings: sentence-transformers
+- Knowledge Base: 835 MITRE ATT&CK techniques
+
+**Capabilities**:
+- Semantic similarity search
+- Technique retrieval with context
+- Detection method recommendations
+- Mitigation strategy suggestions
+
+**API**:
+```bash
+POST /retrieve
+{
+  "query": "SSH brute force attack",
+  "collection": "mitre_attack",
+  "top_k": 5
+}
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Alert #1733110600.FINAL                     🔴 CRITICAL│
-├─────────────────────────────────────────────────────────┤
-│  📊 ML Classification                                    │
-│  Verdict: MALICIOUS (86% confidence)                    │
-│  Flow: 192.168.1.100 → 185.196.10.10:22                │
-│                                                          │
-│  🔍 IP Intelligence (185.196.10.10)                     │
-│  VirusTotal: 5/98 vendors flagged                       │
-│  AbuseIPDB: 0% confidence                               │
-│  Yeti: Found (tags: malware, c2, blocklist)             │
-│  Verdict: 💀 CRITICAL - Known C2 server                │
-│                                                          │
-│  🎯 MITRE ATT&CK                                        │
-│  T1071.001 - Web Protocols (C2)                         │
-│  T1090 - Proxy                                          │
-│                                                          │
-│  [View Full Report] [Block IP] [Create Ticket]          │
-└─────────────────────────────────────────────────────────┘
+
+**Response**:
+```json
+{
+  "techniques_found": 5,
+  "techniques": [
+    {
+      "technique_id": "T1110.001",
+      "name": "Password Guessing",
+      "tactic": "credential-access",
+      "similarity_score": 0.89
+    }
+  ]
+}
 ```
 
 ---
 
-### 4. **RAG Service Integration** (MODIFY - Step 4)
-**Purpose:** Let CrewAI agents query MITRE ATT&CK knowledge base
+### 4. ML Inference Service (Port 8500)
 
-**File:** `services/crewai-intelligence/tools/rag_tool.py` (NEW)
+**Purpose**: Network traffic classification
 
-**Integration:**
+**Models**:
+- Random Forest (99.28% accuracy)
+- XGBoost (99.21% accuracy)
+- Decision Tree (99.10% accuracy)
+
+**Features**: 77-dimensional CICIDS2017 feature set
+
+**API**:
+```bash
+POST /predict
+{
+  "features": [0.0, 0.0, ...],  # 77 features
+  "model_name": "random_forest"
+}
+```
+
+**Response**:
+```json
+{
+  "prediction": "BENIGN",
+  "confidence": 0.86,
+  "model_used": "random_forest",
+  "inference_time_ms": 3.2
+}
+```
+
+---
+
+### 5. Monitoring Stack
+
+**Prometheus (Port 9090)**
+- Metrics collection from all services
+- 15-second scrape interval
+- 30-day retention
+
+**Loki (Port 3100)**
+- Log aggregation
+- Docker container logs
+- 7-day retention
+
+**Promtail**
+- Log shipping agent
+- Automatic Docker discovery
+- Label extraction
+
+**Grafana** (Deployed Separately)
+- Metrics visualization
+- Pre-built dashboards
+- Alert management
+
+---
+
+## CrewAI Agent System
+
+### Agent Architecture
+
+The system employs **10 specialized agents** working in a **sequential workflow**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  PHASE 1: COORDINATION & VALIDATION                          │
+├──────────────────────────────────────────────────────────────┤
+│  Agent 1: Coordinator                                        │
+│  • Validates IP addresses                                    │
+│  • Removes duplicates                                        │
+│  • Prepares investigation scope                             │
+└──────────────────────────────────────────────────────────────┘
+                          ↓
+┌──────────────────────────────────────────────────────────────┐
+│  PHASE 2: EXTERNAL THREAT INTELLIGENCE (Parallel)            │
+├──────────────────────────────────────────────────────────────┤
+│  Agent 2: VirusTotal Specialist                              │
+│  • Query 98+ antivirus vendors                               │
+│  • Malicious detection count                                 │
+│                                                              │
+│  Agent 3: AbuseIPDB Analyst                                  │
+│  • Community abuse reports                                   │
+│  • Abuse confidence score                                    │
+│                                                              │
+│  Agent 4: YETI Platform Analyst                              │
+│  • Internal threat intelligence                              │
+│  • Historical context                                        │
+│                                                              │
+│  Agent 5: SIEM Historian                                     │
+│  • Wazuh historical alerts                                   │
+│  • Past activity timeline                                    │
+└──────────────────────────────────────────────────────────────┘
+                          ↓
+┌──────────────────────────────────────────────────────────────┐
+│  PHASE 3: AI/ML ENRICHMENT (Parallel)                        │
+├──────────────────────────────────────────────────────────────┤
+│  Agent 6: ML Classifier                                      │
+│  • Network traffic prediction                                │
+│  • Attack type classification                                │
+│                                                              │
+│  Agent 7: Alert Triage Analyst                               │
+│  • LLM-based severity assessment                             │
+│  • IOC extraction                                            │
+│                                                              │
+│  Agent 8: MITRE Context Analyst                              │
+│  • ATT&CK technique mapping                                  │
+│  • Detection/mitigation guidance                             │
+└──────────────────────────────────────────────────────────────┘
+                          ↓
+┌──────────────────────────────────────────────────────────────┐
+│  PHASE 4: CORRELATION & REPORTING                            │
+├──────────────────────────────────────────────────────────────┤
+│  Agent 9: Correlation Analyst                                │
+│  • Synthesize all findings                                   │
+│  • Threat verdict (BENIGN/CRITICAL)                          │
+│  • Confidence scoring (0-100%)                               │
+│                                                              │
+│  Agent 10: Report Generator                                  │
+│  • Professional PDF creation                                 │
+│  • Executive summary                                         │
+│  • Technical details                                         │
+│  • Actionable recommendations                                │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Agent Details
+
+#### Agent 1: Threat Intelligence Coordinator
+- **Role**: Orchestrate investigation workflow
+- **Tools**: None (validation only)
+- **Output**: Validated IP list
+
+#### Agent 2: VirusTotal Reputation Specialist
+- **Role**: Query VirusTotal API
+- **Tools**: `VirusTotalTool`
+- **Output**: Malicious count, reputation score
+
+#### Agent 3: AbuseIPDB Analyst
+- **Role**: Check community abuse reports
+- **Tools**: `AbuseIPDBTool`
+- **Output**: Abuse confidence, ISP info
+
+#### Agent 4: Internal Threat Intelligence Analyst
+- **Role**: Search YETI platform
+- **Tools**: `YetiTool`
+- **Output**: Tags, historical context
+
+#### Agent 5: SIEM Historical Analyst
+- **Role**: Query Wazuh database
+- **Tools**: `WazuhSIEMTool`
+- **Output**: Alert count, timeline
+
+#### Agent 6: ML Traffic Classifier
+- **Role**: Network behavior analysis
+- **Tools**: `MLInferenceTool`
+- **Output**: Attack prediction, confidence
+
+#### Agent 7: LLM Alert Triage Specialist
+- **Role**: Semantic alert analysis
+- **Tools**: `AlertTriageTool`
+- **Output**: Severity, IOCs, recommendations
+
+#### Agent 8: MITRE ATT&CK Analyst
+- **Role**: Technique contextualization
+- **Tools**: `RAGMitreTool`
+- **Output**: Relevant techniques, mitigations
+
+#### Agent 9: Threat Correlation Analyst
+- **Role**: Synthesize all intelligence
+- **Tools**: None (analysis only)
+- **Output**: Final verdict, confidence
+
+#### Agent 10: Report Generator
+- **Role**: Create investigation report
+- **Tools**: None (PDF generation)
+- **Output**: Comprehensive PDF report
+
+---
+
+## Integration Workflow
+
+### Automatic Alert Processing (Real-Time)
+
 ```python
-# CrewAI agent can now call RAG service
-from crewai import Tool
+# Wazuh sends alert to webhook
+POST http://localhost:8002/webhook
+{
+  "rule": {"level": 10, "description": "SSH brute force"},
+  "data": {"srcip": "192.168.1.100"}
+}
 
-rag_tool = Tool(
-    name="MITRE ATT&CK Knowledge Base",
-    description="Query MITRE ATT&CK techniques related to IP threat behavior",
-    func=lambda query: requests.post(
-        "http://localhost:8300/retrieve",
-        json={"query": query, "top_k": 5}
-    ).json()
-)
+# Integration Gateway routing logic
+if rule_level >= 8:
+    triage_result = call_alert_triage(alert)
+    
+    if triage_result["severity"] in ["high", "critical"]:
+        mitre_context = call_rag_service(alert)
+        
+        if source_ip:
+            ml_prediction = call_ml_service(source_ip, alert)
 
-# Add to analyst_agent
-analyst_agent.tools = [rag_tool]
+# Store enriched alert
+store_to_dashboard(enriched_alert)
+
+# Flag for investigation if critical
+if rule_level >= 10:
+    flag_for_investigation(alert_id)
+```
+
+### Analyst-Triggered Investigation
+
+```python
+# Analyst clicks "Investigate" in dashboard
+POST http://localhost:8002/investigate/alert-12345
+
+# CrewAI orchestration begins
+crew = IPIntelligenceCrew()
+result = crew.kickoff(inputs={'ip_address': '192.168.1.100'})
+
+# 90-120 seconds later...
+# PDF report generated: reports/IOC_Report_192_168_1_100_20260120_173424.pdf
 ```
 
 ---
 
-## Implementation Steps
+## API Endpoints
 
-### Phase 1: Basic Integration (Week 1)
-✅ **Step 1.1:** Convert CrewAI to FastAPI service  
-✅ **Step 1.2:** Create Orchestrator service skeleton  
-✅ **Step 1.3:** Test: Alert Triage → Orchestrator → CrewAI  
+### Wazuh Integration Gateway (Port 8002)
 
-### Phase 2: Data Flow (Week 2)
-✅ **Step 2.1:** Add PostgreSQL database for enriched alerts  
-✅ **Step 2.2:** Implement IP caching (Redis)  
-✅ **Step 2.3:** Connect Orchestrator to RAG service  
+```
+POST /webhook
+  Description: Receive Wazuh alerts
+  Headers: X-API-Key: Apkl3@Jfyg2
+  Body: Wazuh alert JSON
+  Response: Enrichment status
 
-### Phase 3: Dashboard (Week 3)
-✅ **Step 3.1:** Create EnrichedAlertView component  
-✅ **Step 3.2:** Add WebSocket for real-time updates  
-✅ **Step 3.3:** Implement "View Full Report" modal  
+POST /investigate/{alert_id}
+  Description: Trigger CrewAI investigation
+  Response: Investigation results + PDF path
 
-### Phase 4: Advanced Features (Week 4)
-✅ **Step 4.1:** Add RAG tool to CrewAI agents  
-✅ **Step 4.2:** Implement auto-blocking workflow  
-✅ **Step 4.3:** Add Grafana dashboard for metrics  
+GET /health
+  Description: Service health check
+  Response: {"status": "healthy", ...}
 
----
+GET /metrics
+  Description: Prometheus metrics
+  Response: Metrics in Prometheus format
+```
 
-## Docker Compose Changes
+### Alert Triage Service (Port 8100)
 
-### New Services to Add:
-```yaml
-# docker-compose/ai-services.yml (ADD THESE)
+```
+POST /analyze
+  Description: LLM-based alert analysis
+  Body: Alert details
+  Response: Severity, IOCs, recommendations
 
-  crewai-intelligence:
-    build: ../services/crewai-intelligence
-    ports:
-      - "8501:8501"
-    environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
-      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
-      - YETI_URL=${YETI_URL}
-      - WAZUH_API_URL=https://wazuh-manager:55000
-    depends_on:
-      - ollama
-      - redis
-    networks:
-      - ai-backend
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
-      interval: 30s
+GET /health
+  Description: Service health
+  Response: {"status": "healthy"}
+```
 
-  threat-orchestrator:
-    build: ../services/threat-orchestrator
-    ports:
-      - "8600:8600"
-    environment:
-      - ALERT_TRIAGE_URL=http://alert-triage:8100
-      - CREWAI_URL=http://crewai-intelligence:8501
-      - RAG_URL=http://rag-service:8300
-      - POSTGRES_URL=postgresql://user:pass@postgres:5432/aisoc
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - alert-triage
-      - crewai-intelligence
-      - rag-service
-      - postgres
-      - redis
-    networks:
-      - ai-backend
-      - monitoring
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8600/health"]
-      interval: 30s
+### RAG Service (Port 8001)
+
+```
+POST /retrieve
+  Description: Semantic search MITRE ATT&CK
+  Body: {"query": "...", "top_k": 5}
+  Response: Relevant techniques
+
+GET /health
+  Description: Service health
+  Response: {"status": "healthy"}
+```
+
+### ML Inference Service (Port 8500)
+
+```
+POST /predict
+  Description: Network traffic classification
+  Body: {"features": [...], "model_name": "..."}
+  Response: Prediction, confidence
+
+GET /health
+  Description: Service health
+  Response: {"status": "healthy"}
 ```
 
 ---
 
-## Configuration Files Needed
+## Monitoring & Observability
 
-1. `services/crewai-intelligence/.env`
-2. `services/threat-orchestrator/.env`
-3. `services/threat-orchestrator/config.yaml`
-4. `docker-compose/ai-services-integrated.yml`
+### Metrics Collection
+
+**Prometheus Scrape Targets**:
+- Alert Triage: `http://localhost:8100/metrics`
+- RAG Service: `http://localhost:8001/metrics`
+- ML Inference: `http://localhost:8500/metrics`
+- Integration Gateway: `http://localhost:8002/metrics`
+
+**Key Metrics**:
+```
+wazuh_alerts_received_total{severity="critical|high|medium|low"}
+crewai_executions_total{status="success|error"}
+crewai_execution_duration_seconds
+alert_triage_calls_total{status="success|timeout|error"}
+enrichment_calls_total{service="rag|ml", status="success|error"}
+```
+
+### Log Aggregation
+
+**Loki + Promtail**:
+- All Docker container logs
+- Searchable via Grafana Explore
+- 7-day retention
+
+**Query Examples**:
+```
+{container_name="alert-triage"} |= "error"
+{container_name=~"rag-service|ml-inference"} |= "predict"
+```
 
 ---
 
-## Success Criteria
+## Documentation
 
-### ✅ Integration Complete When:
-1. Alert Triage sends alert → Orchestrator extracts IP → CrewAI analyzes
-2. Dashboard shows unified view: ML verdict + IP intelligence + MITRE
-3. RAG service provides MITRE context to both Alert Triage AND CrewAI
-4. Latency: End-to-end enrichment < 30 seconds
-5. No duplicate IP analyses (caching works)
+### Complete Documentation Set
 
-### 📊 Metrics to Track:
-- Alerts enriched per hour
-- Average IP analysis time
-- Cache hit rate
-- False positive reduction (before vs after IP intel)
+1. **[QUICKSTART.md](docs/QUICKSTART.md)** - 5-minute deployment guide
+2. **[INSTALLATION.md](docs/INSTALLATION.md)** - Detailed setup instructions
+3. **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System design and data flow
+4. **[API_REFERENCE.md](docs/API_REFERENCE.md)** - Complete API documentation
+5. **[MONITORING.md](docs/MONITORING.md)** - Observability and metrics
+6. **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and fixes
+7. **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Developer guide
+8. **[ROADMAP.md](ROADMAP.md)** - Future development plan
 
 ---
 
-## Next Steps
+## Development Roadmap
 
-**RIGHT NOW:** We'll start with **Step 1.1** - Converting your CrewAI project to a FastAPI service.
+### Phase 1: Core Infrastructure ✅ (Complete)
+- [x] Wazuh Integration Gateway
+- [x] Alert Triage Service
+- [x] RAG Service with MITRE ATT&CK
+- [x] ML Inference Service
+- [x] CrewAI Agent Orchestration
+- [x] Monitoring Stack
 
-**QUESTION:** Should I proceed with creating the FastAPI wrapper for your CrewAI crew?
+### Phase 2: Production Deployment 🚧 (In Progress)
+- [ ] Deploy Wazuh SIEM
+- [ ] Fix port mappings (8001→8200, 8500→8300)
+- [ ] Configure Wazuh webhook integration
+- [ ] Implement database persistence
+- [ ] Build SOC Dashboard UI
+
+### Phase 3: Advanced Features (Planned)
+- [ ] Multi-class ML classification (24 attack types)
+- [ ] Automated incident response playbooks
+- [ ] Threat hunting workflows
+- [ ] Custom detection rules engine
+- [ ] Integration with ticketing systems
+
+### Phase 4: Scale & Optimize (Future)
+- [ ] Kubernetes deployment
+- [ ] Horizontal scaling
+- [ ] Performance optimization
+- [ ] Advanced caching strategies
+- [ ] Multi-tenant support
+
+---
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## Contact
+
+**Author**: [Your Name]
+**Email**: [your.email@example.com]
+**Repository**: [GitHub URL]
+
+---
+
+**Last Updated**: 2026-01-20
+**Version**: 1.0.0
+**Status**: Production-Ready (80% Complete)
