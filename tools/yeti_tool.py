@@ -1,5 +1,6 @@
 import requests
 from crewai.tools import BaseTool
+import os
 
 
 class YetiTool(BaseTool):
@@ -11,14 +12,14 @@ class YetiTool(BaseTool):
         Search IP in Yeti internal threat intelligence database.
         
         Args:
-            ip_address: IP address to search (e.g., '8.8.8.8')
+            ip_address: IP address to search (e.g., '185.220.101.174')
         
         Returns:
             Dictionary with Yeti findings, tags, and threat level
         """
-        base_url = "http://192.168.217.128:8000"
-        username = "admin"
-        password = "XXXXXXXXXX"
+        base_url = os.getenv("YETI_URL", "http://YOUR_YETI_IP:PORT")
+        username = os.getenv("YETI_USERNAME", "your_username")
+        password = os.getenv("YETI_PASSWORD", "your_actual_password")
         
         try:
             # Authenticate
