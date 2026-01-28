@@ -27,21 +27,21 @@ class Settings(BaseSettings):
     # --------------------------------------------------
     # LLM Provider Selection
     # --------------------------------------------------
-    llm_provider: str = "groq"  # groq | ollama
+    llm_provider: str = "ollama_cloud"  # groq | ollama
 
     # --------------------------------------------------
     # Groq LLM Configuration
     # --------------------------------------------------
-    groq_api_key: str = ""
-    groq_api_base: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "llama-3.3-70b-versatile"
+    # groq_api_key: str = ""
+    # groq_api_base: str = "https://api.groq.com/openai/v1"
+    # groq_model: str = "llama-3.3-70b-versatile"
 
     # --------------------------------------------------
     # Ollama LLM Configuration (Fallback / Local)
     # --------------------------------------------------
-    ollama_host: str = "http://ollama:11434"
-    primary_model: str = "llama3.1:8b"
-    fallback_model: str = "llama3.2:3b"
+    # ollama_host: str = "http://ollama:11434"
+    # primary_model: str = "llama3.1:8b"
+    # fallback_model: str = "llama3.2:3b"
 
     # --------------------------------------------------
     # LLM Parameters

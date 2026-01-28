@@ -226,7 +226,13 @@ async def trigger_crewai_investigation(alert_id: str):
     if not alert_data:
         raise HTTPException(status_code=404, detail="Alert not found")
     
+    # CRITICAL DEBUG: Log what we retrieved
+    logger.warning(f"🔍 RETRIEVED ALERT_DATA: {alert_data}")
+    
     source_ip = alert_data.get("source_ip")
+    logger.warning(f"🔍 EXTRACTED SOURCE_IP: {source_ip}")
+    logger.warning(f"🔍 ALERT_DATA CONTENTS: {alert_data}")
+    logger.warning(f"⚡ PASSING TO CREWAI: ip_address={source_ip}")
     
     if not source_ip:
         raise HTTPException(status_code=400, detail="No source IP in alert")
@@ -236,12 +242,13 @@ async def trigger_crewai_investigation(alert_id: str):
     try:
         start_time = time.time()
         
-        logger.info(f"⚡ Starting full CrewAI pipeline for IP: {source_ip}")
+        logger.warning(f"⚡ PASSING TO CREWAI: ip_address={source_ip}")
         
         # Execute full CrewAI investigation
         crew_instance = IPIntelligenceCrew()
         my_crew = crew_instance.crew()
         
+        # CRITICAL: Pass the IP to CrewAI
         result = my_crew.kickoff(inputs={'ip_address': source_ip})
         
         duration = time.time() - start_time
@@ -369,13 +376,14 @@ async def call_ml_service(ip: str, alert: dict) -> dict:
 
 
 # ===== DATABASE/STORAGE HELPERS =====
+alert_store = {}
 
 async def store_to_dashboard(alert: dict):
-    """
-    Store alert to your incident database/dashboard
-    TODO: Implement actual storage (PostgreSQL, Elasticsearch, etc.)
-    """
-    logger.info(f"📊 Stored alert {alert.get('alert_id')} to dashboard")
+    """Store alert to memory"""
+    alert_id = alert.get('alert_id')
+    if alert_id:
+        alert_store[alert_id] = alert
+        logger.warning(f"📊 STORED ALERT: {alert_id} with source_ip={alert.get('source_ip')}")
     # Example: await db.alerts.insert_one(alert)
 
 
@@ -389,19 +397,17 @@ async def flag_for_investigation(alert: dict):
 
 
 async def get_alert_from_dashboard(alert_id: str) -> dict:
-    """
-    Retrieve alert from dashboard/database
-    TODO: Implement actual retrieval
-    """
-    logger.info(f"📖 Retrieved alert {alert_id} from dashboard")
-    # Example: return await db.alerts.find_one({"alert_id": alert_id})
+    """Retrieve alert from memory"""
+    logger.info(f"📖 Retrieving alert {alert_id} from dashboard")
     
-    # Placeholder - replace with actual DB query
-    return {
-        "alert_id": alert_id,
-        "source_ip": "8.8.8.8",  # Replace with actual data
-        "rule_level": 10
-    }
+    alert = alert_store.get(alert_id)
+    
+    if not alert:
+        logger.error(f"❌ Alert {alert_id} not found in store. Available: {list(alert_store.keys())}")
+        return None
+    
+    logger.warning(f"✅ Found alert {alert_id} with keys: {list(alert.keys())}")
+    return alert
 
 
 async def update_alert_investigation(alert_id: str, investigation_data: dict):
@@ -410,10 +416,6 @@ async def update_alert_investigation(alert_id: str, investigation_data: dict):
     TODO: Implement actual update
     """
     logger.info(f"📝 Updated alert {alert_id} with investigation results")
-    # Example: await db.alerts.update_one(
-    #     {"alert_id": alert_id},
-    #     {"$set": {"investigation": investigation_data}}
-    # )
 
 
 # ===== HEALTH & METRICS =====
